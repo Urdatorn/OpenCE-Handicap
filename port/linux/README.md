@@ -270,7 +270,11 @@ Network games have split screen too: up to 4 players on each computer. In
 the game lobby, another controller presses START to join, and the new
 player's profile is chosen on the ADD PLAYER screen that opens (with any
 controller). With one gamepad, choose the lobby's ADD PLAYER button first:
-until then that gamepad shares controller 1 with the keyboard. Two players on one profile get different names from the host. A
+until then that gamepad shares controller 1 with the keyboard. Two players on one profile get different names from the host.
+Until another machine joins a system link or internet game, the host's
+split screen players can start it however many they are, on whichever
+teams (the others join it in progress); once one joins, a team game needs
+players on both teams. A
 player's B in the lobby leaves the game alone, and the last player of the
 computer leaves it for all of them. In the game, each player's pause menu
 opens on their part of the screen, and its LEAVE GAME is theirs: their part

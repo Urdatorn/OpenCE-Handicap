@@ -3100,11 +3100,16 @@ boolean server_has_enough_machines(
 }
 
 /* port: a game's one player, with no one else in it yet, may start it:
-a system link or internet game's host, or split screen's first player */
+a system link or internet game's host, or split screen's first player; and
+so may the host's machine with no other machine in its system link or
+internet game yet, its split screen players however many and on whichever
+teams (the others join it in progress) */
 static boolean server_alone(
 	struct network_game_server *server)
 {
-	return server->game.player_count == 1;
+	return server->game.player_count == 1 ||
+		(server->game.player_count > 1 && network_game_should_accept_remote_connections() &&
+			network_game_server_get_client_machine_count(server) == 1);
 }
 
 boolean server_ok_to_countdown(
