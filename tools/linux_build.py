@@ -144,12 +144,19 @@ def miniupnpc_sources() -> List[Path]:
 def updater_defines(release: bool) -> str:
     """the self-updater's build (port/linux/src/updater.c): its number, from
     HALO_BUILD_NUMBER (tools/ci_build.py gives it for builds of main; none
-    elsewhere, which never look for updates), and its configuration"""
+    elsewhere, which never look for updates), its configuration, and the
+    GitHub repository whose releases it updates from, HALO_UPDATE_REPOSITORY
+    (tools/ci_build.py gives the one that built it, so that a fork's builds
+    update from the fork's releases; none: the updater's own)"""
     number = os.environ.get("HALO_BUILD_NUMBER", "0")
     if not number.isdigit():
         number = "0"
     flavor = "release" if release else "debug"
-    return f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    defines = f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
+    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        defines += f' -DHALO_UPDATE_REPOSITORY=\\"{repository}\\"'
+    return defines
 
 PLATFORM_FLAGS = [
     "-std=gnu11",

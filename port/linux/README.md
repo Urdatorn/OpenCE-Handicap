@@ -424,6 +424,10 @@ let the game write to it.
 Builds that you make yourself have no build number. They do not look for
 updates.
 
+A build updates from the releases of the GitHub repository that built it
+(`tools/ci_build.py` gives the name to the build). Thus the builds of a fork
+update from the releases of the fork, not from those of OpenCE.
+
 ## Frame rate
 
 The game calculates its world at 30 Hz, as on the Xbox. On the Xbox, the
@@ -835,6 +839,63 @@ the invite with the invite button of Discord. When a person accepts it, that
 person joins the game. If the game does not operate, Discord starts it.
 The game sends the activity only to a Discord client of the same user.
 
+## Handicaps
+
+A handicap lets players of different skill play together. It multiplies the
+health and the shields of one player. A player with the handicap 2.0 takes
+half the damage. A player with the handicap 0.5 takes twice the damage.
+
+The host sets the handicaps. Only the handicaps of the host apply, because
+the host decides all the damage. The other machines do not need the
+handicaps, and nothing is sent to them. In a split screen game, the
+handicaps of that machine apply. The handicaps apply only to multiplayer
+games, not to the campaign.
+
+Put the handicaps in the `[handicap]` section of `config.toml` on the host,
+one line for each player:
+
+```toml
+[handicap]
+"Player One" = 2.0
+"Ace" = 0.75
+```
+
+- The name is the name of the player in the game. Upper case and lower
+  case letters are the same. A letter with a mark (`ö`) is the same as the
+  letter without the mark (`o`).
+- Put each name between quotes. A name with a space and no quotes is an
+  error in `config.toml`, and then the game uses the default value of
+  every setting (the terminal shows the line of the error). The console
+  command (below) always writes correct lines.
+- The value is from 0.25 to 4. A player who is not in the list has 1.0.
+- The handicap divides all the damage that the player takes: from other
+  players, from vehicles, from falls and from the player's own grenades.
+  It does not change the damage that the player gives, or the damage that
+  a vehicle takes when the player drives it.
+- The gametype's health also applies. With the health 200% and the
+  handicap 2.0, a player takes a quarter of the damage.
+- The game reads `[handicap]` again at the start of each game. Thus you can
+  change the file between games. The terminal (on Windows, `halo.log` next
+  to `halo.exe`) shows the handicaps that the game read, and the handicap of
+  each player when the player first takes damage.
+
+The host can also use the developer console (\`):
+
+| Command | Result |
+| --- | --- |
+| `handicap` | Shows the handicap of each player. |
+| `handicap <name>` | Shows the handicap of one player. |
+| `handicap <name> <multiple>` | Sets the handicap of the player now, and writes it to `config.toml`. The multiple can be `2`, `1.5`, `2x` or `150%`. |
+
+Tab completes the name. The start of a name is sufficient if the name of
+only one player begins with it. On a machine that is not the host, the
+command only tells you that the host's handicaps apply.
+
+The HUD shows the health and the shields as a part of their maximum, as
+before. Thus the meters of a player with the handicap 2.0 go down half as
+fast. The shields recharge at the usual speed. The other players do not see
+the handicaps.
+
 ## Map checks
 
 The game reads a map's tags straight into memory and uses them as its own
@@ -1005,6 +1066,7 @@ Other changes:
 | `interface/ui_widget.c`, `interface/ui_widget_event_handler_functions.c`, `interface/ui_widget_game_data_input_functions.c` | The main menu is the PC version's from `port/assets/menus` (`display.menus`); the menus' widgets can call the port's functions (`game/menu_functions.c`) and send the PC version's custom activation event; the widgets' memory is 256 KB, not 16 KB; the main menu and Multiplayer clear co-op's controllers, so that a gamepad going back to controller 1 is not a controller unplugged; the lobby's split screen players leave alone, and one who quits in game is not joined to the next game (`interface/player_ui.c`). |
 | `input/input_abstraction.c`, `game/player_control.c`, `game/players.c`, `game/player_queues_new.c`, `units/units.h` | The keyboard and mouse's actions (`src/xinput_sdl.c`, `include/halo_keyboard.h`) join controller 1's game controls; their reload key reloads on its own, and their action key only acts (a control flag of the port's, sent with the player's action, stops the reload the controller's X falls back to). |
 | `sound/sound_manager.c`, `interface/hud.c`, `game/game_engine.c` | The music's and the other sounds' volumes; the HUD's and the scoreboard's settings are read again when Settings changes them. |
+| `game/game_engine.c`, `hs/hs.c`, `main/console.c` | The damage that a player takes is divided by the player's handicap, from the host's `[handicap]` (`game/handicap.c`), which is read again as each game starts; the console's `handicap` command shows and sets the handicaps, and Tab completes its player names. Refer to "Handicaps". |
 | `rasterizer/xbox/rasterizer_xbox_shadows.c` | With larger shadow maps (`display.shadow_resolution`), the blur's taps stay half a texel apart, and more passes widen it to cover the same part of the map as on the Xbox. |
 | `render/render.c` | The 3D view of each window is antialiased before the HUD is drawn (`display.anti_aliasing`). |
 | `interface/hud.c` | In multiplayer, players' names are drawn above their heads (`display.player_names`, `display.player_name_scale`). |

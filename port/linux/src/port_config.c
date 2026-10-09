@@ -538,6 +538,48 @@ static struct config_value config_values[NUMBER_OF_CONFIG_SETTINGS];
 static int config_loaded = 0;
 static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* ---------- the tables of names
+
+Sections whose keys are not settings but names of the player's choosing,
+each with a number (config_table_numbers): written into the file with their
+comment, without keys, as a setting is when it is missing. */
+
+struct config_name_table
+{
+	const char *section;
+	const char *comment;
+};
+
+static const struct config_name_table config_name_tables[] =
+{
+	{ "handicap",
+		"Multiplayer handicaps, by player name: each player's health and shields\n"
+		"as a multiple of the gametype's, 0.25 to 4 (2.0 takes half the damage,\n"
+		"0.5 twice as much). Only the host's handicaps count (and in split screen,\n"
+		"this machine's); the other machines need not have them. A name matches\n"
+		"in either case, a letter with a mark as its plain letter. Quote every\n"
+		"name: one with a space unquoted is an error, and the whole file is then\n"
+		"left out. Read again as each game starts. The console's \"handicap\"\n"
+		"lists the players' handicaps, and \"handicap <name> <multiple>\" sets one\n"
+		"now and here. For example:\n"
+		"\"Player One\" = 2.0\n"
+		"\"Ace\" = 0.75" },
+};
+
+#define NUMBER_OF_CONFIG_NAME_TABLES (sizeof(config_name_tables) / sizeof(config_name_tables[0]))
+
+static int config_name_table(const char *section)
+{
+	size_t index;
+
+	for (index = 0; index < NUMBER_OF_CONFIG_NAME_TABLES; index++)
+	{
+		if (!strcmp(config_name_tables[index].section, section))
+			return 1;
+	}
+	return 0;
+}
+
 /* ---------- the file */
 
 static void config_path(char *path, size_t size)
@@ -690,6 +732,26 @@ static void config_append_setting(struct config_text *text, const struct config_
 	config_append(text, buffer);
 }
 
+/* a table of names' header and comment, without keys */
+static void config_append_name_table(struct config_text *text, const struct config_name_table *table)
+{
+	const char *line;
+	char buffer[256];
+
+	snprintf(buffer, sizeof(buffer), "\n[%s]\n", table->section);
+	config_append(text, buffer);
+	for (line = table->comment; *line;)
+	{
+		size_t length = strcspn(line, "\n");
+
+		snprintf(buffer, sizeof(buffer), "# %.*s\n", (int)length, line);
+		config_append(text, buffer);
+		line += length;
+		if (*line)
+			line++;
+	}
+}
+
 /* the file with every setting of this build at its default */
 static char *config_default_text(void)
 {
@@ -728,6 +790,8 @@ static char *config_default_text(void)
 		}
 		config_append_setting(&text, setting);
 	}
+	for (index = 0; index < NUMBER_OF_CONFIG_NAME_TABLES; index++)
+		config_append_name_table(&text, &config_name_tables[index]);
 	return text.buffer;
 }
 
@@ -806,6 +870,26 @@ static char *config_add_missing(const char *text, toml_datum_t table)
 			free(result);
 			result = updated.buffer;
 			platform_log("settings: added %s (new in this version) at its default", setting->name);
+		}
+	}
+	/* (and the tables of names, without keys, at the end) */
+	for (index = 0; index < NUMBER_OF_CONFIG_NAME_TABLES; index++)
+	{
+		const struct config_name_table *name_table = &config_name_tables[index];
+		const char *current = result ? result : text;
+		struct config_text updated = { NULL, 0, 0 };
+
+		if (toml_get(table, name_table->section).type != TOML_UNKNOWN)
+			continue;
+		config_append(&updated, current);
+		if (current[0] && current[strlen(current) - 1] != '\n')
+			config_append(&updated, "\n");
+		config_append_name_table(&updated, name_table);
+		if (updated.buffer)
+		{
+			free(result);
+			result = updated.buffer;
+			platform_log("settings: added [%s] (new in this version)", name_table->section);
 		}
 	}
 	return result;
@@ -920,7 +1004,8 @@ static long config_setting_index(const char *name)
 	return -1;
 }
 
-/* keys in the file that are no setting, likely misspelt */
+/* keys in the file that are no setting, likely misspelt (but those of the
+tables of names, config_table_numbers) */
 static void config_report_unknown_keys(toml_datum_t table)
 {
 	int section_index;
@@ -935,6 +1020,8 @@ static void config_report_unknown_keys(toml_datum_t table)
 			platform_log("config.toml line %d: unknown setting %s", section.lineno, table.u.tab.key[section_index]);
 			continue;
 		}
+		if (config_name_table(table.u.tab.key[section_index]))
+			continue;
 		for (key_index = 0; key_index < section.u.tab.size; key_index++)
 		{
 			char name[128];
@@ -1198,6 +1285,235 @@ int config_write_boolean(const char *name, int value)
 	long index = config_setting_index(name);
 
 	return index >= 0 && config_settings[index].type == _config_boolean && config_write(name, value ? "true" : "false");
+}
+
+/* ---------- the tables of names: reading and writing */
+
+int config_table_numbers(const char *section,
+	void (*each)(void *context, const char *key, double value, int line), void *context)
+{
+	char path[1024];
+	size_t size = 0;
+	char *text;
+	toml_result_t result;
+	toml_datum_t table;
+	int count = 0;
+	int index;
+
+	config_path(path, sizeof(path));
+	/* (not while config_write writes the file) */
+	pthread_mutex_lock(&config_lock);
+	text = config_read_file(path, &size);
+	pthread_mutex_unlock(&config_lock);
+	if (!text)
+		return -1;
+	result = toml_parse(text, (int)size);
+	if (!result.ok)
+	{
+		platform_log("config.toml: %s; no [%s]", result.errmsg, section);
+		toml_free(result);
+		free(text);
+		return -1;
+	}
+	table = toml_get(result.toptab, section);
+	if (table.type == TOML_TABLE)
+	{
+		for (index = 0; index < table.u.tab.size; index++)
+		{
+			toml_datum_t datum = table.u.tab.value[index];
+
+			if (datum.type == TOML_FP64 || datum.type == TOML_INT64)
+			{
+				each(context, table.u.tab.key[index], datum.type == TOML_FP64 ? datum.u.fp64 : (double)datum.u.int64,
+					datum.lineno);
+				count++;
+			}
+			else
+			{
+				platform_log("config.toml line %d: [%s] %s should be a number; left out", datum.lineno, section,
+					table.u.tab.key[index]);
+			}
+		}
+	}
+	else if (table.type != TOML_UNKNOWN)
+	{
+		platform_log("config.toml line %d: %s should be a section, [%s]", table.lineno, section, section);
+	}
+	toml_free(result);
+	free(text);
+	return count;
+}
+
+/* the key of a "key = value" line (after spaces), bare or quoted, unquoted
+in key; 0 if the line is not one (or its key is dotted, or too long) */
+static int config_line_any_key(const char *line, const char *end, char *key, size_t size)
+{
+	size_t length = 0;
+
+	while (line < end && (*line == ' ' || *line == '\t'))
+		line++;
+	if (line >= end)
+		return 0;
+	if (*line == '"' || *line == '\'')
+	{
+		char quote = *line++;
+
+		while (line < end && *line != quote)
+		{
+			char character = *line++;
+
+			/* (a basic string's escapes of a quote and a backslash; the
+			others a name has no use for) */
+			if (quote == '"' && character == '\\' && line < end)
+				character = *line++;
+			if (length + 1 >= size)
+				return 0;
+			key[length++] = character;
+		}
+		if (line >= end)
+			return 0;
+		line++;
+	}
+	else
+	{
+		while (line < end && ((*line >= 'A' && *line <= 'Z') || (*line >= 'a' && *line <= 'z') ||
+			(*line >= '0' && *line <= '9') || *line == '_' || *line == '-'))
+		{
+			if (length + 1 >= size)
+				return 0;
+			key[length++] = *line++;
+		}
+		if (!length)
+			return 0;
+	}
+	key[length] = 0;
+	while (line < end && (*line == ' ' || *line == '\t'))
+		line++;
+	return line < end && *line == '=';
+}
+
+/* text held back, appended to out and emptied */
+static void config_flush(struct config_text *out, struct config_text *held)
+{
+	if (held->buffer && held->length)
+		config_append(out, held->buffer);
+	held->length = 0;
+	if (held->buffer)
+		held->buffer[0] = 0;
+}
+
+/* whether a line holds only spaces */
+static int config_line_blank(const char *line, const char *end)
+{
+	while (line < end && (*line == ' ' || *line == '\t' || *line == '\r'))
+		line++;
+	return line >= end;
+}
+
+int config_table_write_number(const char *section, const char *old_key, const char *key, double value)
+{
+	char current[64] = "", number[40], line_text[600], path[1024];
+	struct config_text out = { 0 };
+	/* the section's blank lines not yet followed by another of its lines: a
+	key added at its end goes before them */
+	struct config_text blank = { 0 };
+	size_t size = 0;
+	char *text;
+	char *end;
+	const char *line;
+	const char *character;
+	int written = 0, in_section = 0, succeeded;
+
+	if (!old_key)
+		old_key = key;
+	if (strlen(key) > 256)
+		return 0;
+	/* (with its point: TOML reads 1 as an integer) */
+	snprintf(number, sizeof(number), "%.15g", value);
+	if (!strpbrk(number, ".en"))
+		strcat(number, ".0");
+	/* the key quoted, as a TOML basic string (a name's control characters
+	left out) */
+	end = line_text;
+	*end++ = '"';
+	for (character = key; *character; character++)
+	{
+		if ((unsigned char)*character < 0x20 || *character == 0x7F)
+			continue;
+		if (*character == '"' || *character == '\\')
+			*end++ = '\\';
+		*end++ = *character;
+	}
+	snprintf(end, sizeof(line_text) - (size_t)(end - line_text), "\" = %s\n", number);
+
+	config_path(path, sizeof(path));
+	pthread_mutex_lock(&config_lock);
+	text = config_read_file(path, &size);
+	for (line = text ? text : ""; *line;)
+	{
+		const char *line_end = line + strcspn(line, "\n");
+		const char *next = *line_end ? line_end + 1 : line_end;
+		char line_key[300];
+		char *copy;
+
+		if (config_line_section(line, line_end, current, sizeof(current)))
+		{
+			/* (leaving the section without the key: it goes at its end) */
+			if (in_section && !written)
+			{
+				if (out.length && out.buffer[out.length - 1] != '\n')
+					config_append(&out, "\n");
+				config_append(&out, line_text);
+				written = 1;
+			}
+			in_section = !strcmp(current, section);
+		}
+		else if (in_section && !written && config_line_any_key(line, line_end, line_key, sizeof(line_key)) &&
+			!strcmp(line_key, old_key))
+		{
+			config_flush(&out, &blank);
+			config_append(&out, line_text);
+			written = 1;
+			line = next;
+			continue;
+		}
+		copy = config_copy(line, (size_t)(next - line));
+		if (copy)
+		{
+			if (in_section && !written && config_line_blank(line, line_end))
+			{
+				config_append(&blank, copy);
+			}
+			else
+			{
+				/* (any other line: the blank lines before it stay before it) */
+				config_flush(&out, &blank);
+				config_append(&out, copy);
+			}
+			free(copy);
+		}
+		line = next;
+	}
+	if (!written)
+	{
+		if (out.length && out.buffer[out.length - 1] != '\n')
+			config_append(&out, "\n");
+		if (!in_section)
+		{
+			char header[80];
+
+			snprintf(header, sizeof(header), "\n[%s]\n", section);
+			config_append(&out, header);
+		}
+		config_append(&out, line_text);
+	}
+	config_flush(&out, &blank);
+	succeeded = out.buffer && config_write_file(path, out.buffer);
+	pthread_mutex_unlock(&config_lock);
+	free(out.buffer);
+	free(blank.buffer);
+	free(text);
+	return succeeded;
 }
 
 /* a setting's value as text ("true", "60", "1.5", "all"): 0 if there is no

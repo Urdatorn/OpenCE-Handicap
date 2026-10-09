@@ -59,10 +59,15 @@ def main() -> int:
         configure += ["--compiler-launcher", launcher]
     # a build of main knows its number, which names its release (build-<n>),
     # for the self-updater (port/linux/src/updater.c, and the Android app);
-    # other builds have none, and never look for updates
+    # other builds have none, and never look for updates. It updates from the
+    # releases of the repository that built it (a fork's from the fork's,
+    # which the workflow publishes them to)
     if os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
         os.environ["HALO_BUILD_NUMBER"] = os.environ["GITHUB_RUN_NUMBER"]
         print(f"build number {os.environ['HALO_BUILD_NUMBER']}", flush=True)
+        if os.environ.get("GITHUB_REPOSITORY"):
+            os.environ["HALO_UPDATE_REPOSITORY"] = os.environ["GITHUB_REPOSITORY"]
+            print(f"updates from {os.environ['HALO_UPDATE_REPOSITORY']}", flush=True)
     run(configure)
 
     if args.platform == "android":

@@ -60,6 +60,7 @@ symbols in this file:
 #include "hs/hs.h"
 #include "networking/network_server_manager.h"
 #include "network_votekick.h" /* port: port/linux/game/network_votekick.c */
+#include "handicap.h" /* port: port/linux/game/handicap.c */
 #include "input/input.h"
 #include "interface/terminal.h"
 #include "math/real_math.h"
@@ -261,13 +262,14 @@ static char *console_get_text_to_autocomplete(
 }
 
 /* port: the text after the host's ban or kick command ("ban ", "kick "),
-or any player's votekick ("votekick "), which completes as a player's name
-(network_game_server_matching_player_names, network_votekick_matching_player_names;
-the command's index: votekick's, 2); NULL if the input is not one */
+any player's votekick ("votekick ") or the host's handicap ("handicap "),
+which completes as a player's name (network_game_server_matching_player_names,
+network_votekick_matching_player_names, handicap_matching_player_names; the
+command's index: votekick's, 2, handicap's, 3); NULL if the input is not one */
 static char *console_player_command_name(
 	short *command_index)
 {
-	static char const *const commands[] = { "ban", "kick", "votekick" };
+	static char const *const commands[] = { "ban", "kick", "votekick", "handicap" };
 	char *text = console_globals.input_state.result;
 	short command;
 
@@ -317,6 +319,9 @@ static void console_complete(
 		/* (the votekick's: any machine's, from the game's players) */
 		if (command_index == 2)
 			count = network_votekick_matching_player_names(token, player_names, NUMBEROF(player_names));
+		/* (the handicap's: any player's, the host's own too) */
+		else if (command_index == 3)
+			count = handicap_matching_player_names(token, player_names, NUMBEROF(player_names));
 		else
 			count = network_game_server_matching_player_names(token, player_names, NUMBEROF(player_names));
 		for (index = 0; index < count; index++)

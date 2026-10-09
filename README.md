@@ -12,6 +12,22 @@ Windows and Android. The decompilation is of the Xbox build 2342
 The port starts from the decompilation of [bnunu/halo-1](https://github.com/bnunu/halo-1).
 That project is a fork of [punpckhdq/halo](https://github.com/punpckhdq/halo).
 
+## This fork: handicaps
+
+This fork of [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) adds
+handicaps to multiplayer games, so that players of different skill can play
+together. The host gives each player, by name, a multiple of the health and
+the shields: a player with the handicap 2.0 takes half the damage. Only the
+host needs this fork. Refer to "Handicaps" in
+[port/linux/README.md](port/linux/README.md#handicaps).
+
+```toml
+# config.toml of the host
+[handicap]
+"Player One" = 2.0
+"Ace" = 0.75
+```
+
 ## Download
 
 GitHub Actions builds the game for each commit. These links download the
@@ -19,9 +35,9 @@ builds of the latest release:
 
 | Platform | Release | Debug |
 | --- | --- | --- |
-| Linux | [halo-linux-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-linux-release.zip) | [halo-linux-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-linux-debug.zip) |
-| Windows | [halo-windows-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-windows-release.zip) | [halo-windows-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-windows-debug.zip) |
-| Android | [halo-android-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-android-release.zip) | [halo-android-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-android-debug.zip) |
+| Linux | [halo-linux-release.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-linux-release.zip) | [halo-linux-debug.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-linux-debug.zip) |
+| Windows | [halo-windows-release.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-windows-release.zip) | [halo-windows-debug.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-windows-debug.zip) |
+| Android | [halo-android-release.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-android-release.zip) | [halo-android-debug.zip](https://github.com/Urdatorn/OpenCE-Handicap/releases/latest/download/halo-android-debug.zip) |
 
 Use the release build to play. The debug build stops at the first failed
 assertion and writes it to the log. Use the debug build to find and report
@@ -32,7 +48,7 @@ if you want to install it. Refer to "Updates" in
 [port/linux/README.md](port/linux/README.md#updates).
 
 Each build of the `main` branch that passes on all three platforms is a new
-release. The [Releases](https://github.com/OpenCommunityEdition/OpenCE/releases)
+release. The [Releases](https://github.com/Urdatorn/OpenCE-Handicap/releases)
 page keeps the last five releases. If the latest build has a problem, get
 an older build from that page.
 

@@ -38,4 +38,18 @@ int config_default(const char *name, char *text, size_t size);
 it again when this moves */
 unsigned long config_changes(void);
 
+/* A table of names (config.toml's [handicap]): keys of the player's choosing,
+each with a number, read afresh from the file each time (not kept, as the
+settings are). */
+
+/* calls each for every key of the section whose value is a number (the
+others reported in the log), in the file's order, with its line; how many,
+-1 if the file cannot be read or parsed */
+int config_table_numbers(const char *section,
+	void (*each)(void *context, const char *key, double value, int line), void *context);
+/* sets a key of the section in the file: the line of old_key (as the file
+has it, unquoted; NULL for key) becomes key's, quoted; else it is added at
+the section's end (the section at the file's); 1 on success */
+int config_table_write_number(const char *section, const char *old_key, const char *key, double value);
+
 #endif

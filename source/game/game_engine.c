@@ -571,6 +571,7 @@ symbols in this file:
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 #include "network_votekick.h" /* port: port/linux/game/network_votekick.c */
 #include "network_voice.h" /* port: port/linux/game/network_voice.c */
+#include "handicap.h" /* port: port/linux/game/handicap.c */
 /* (network_server_manager_internal.h's: the host's game record) */
 struct network_game *network_game_server_get_game(struct network_game_server *server);
 #include "objects.h"
@@ -4312,6 +4313,8 @@ void game_engine_game_starting(
 			game_engine->game_starting();
 
 		game_engine_build_lighting();
+		/* port: the host's handicaps read again (port/linux/game/handicap.c) */
+		handicap_game_starting();
 	}
 
 	return;
@@ -7638,6 +7641,10 @@ real game_engine_get_damage_multiplier(
 
 	if (game_engine)
 		result /= PIN(global_variant.universal_variant.health, 0.25f, 4.0f);
+
+	/* port: and the damaged player's handicap, the host's (config.toml's
+	[handicap], by name: port/linux/game/handicap.c) */
+	result *= handicap_damage_multiplier(damaged_player_index);
 
 	if (damaging_player_index != NONE &&
 		damaged_player_index != NONE)

@@ -2806,6 +2806,7 @@ symbols in this file:
 #include "networking/network_game_manager.h"
 #include "networking/network_server_manager.h"
 #include "network_votekick.h" /* port: port/linux/game/network_votekick.c */
+#include "handicap.h" /* port: port/linux/game/handicap.c */
 #include "objects/damage.h"
 #include "objects/object_lights.h"
 #include "objects/scenery.h"
@@ -15362,6 +15363,15 @@ static boolean hs_compile_and_evaluate_command(
 	(players.c; a client is told it is the host's) */
 	if (hs_host_player_command(expression, "bringto"))
 		return players_coop_bring_to_host();
+	/* port: the host's multiplayer handicaps ("handicap", "handicap <player
+	name> <multiple>", or the name's start: Tab completes it), which are no
+	script's; a client is told only the host's count (handicap.c) */
+	{
+		char const *text = hs_host_player_command(expression, "handicap");
+
+		if (text)
+			return handicap_command(text);
+	}
 	/* port: the players' vote to kick a player ("votekick <player name>",
 	or the name's start: Tab completes it), on any machine of a network
 	game: the host counts (network_votekick.c) */
