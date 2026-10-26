@@ -569,6 +569,10 @@ static void handicap_list(
 			if (player->quit_out_of_game)
 				continue;
 			handicap_player_name(player, name, sizeof(name));
+			/* (a dedicated server's menus have a player with no name, not
+			one of the game's) */
+			if (!name[0])
+				continue;
 			console_printf(FALSE, "%s: x%g", name, handicap_of_player(iterator.datum_index));
 			count++;
 		}
