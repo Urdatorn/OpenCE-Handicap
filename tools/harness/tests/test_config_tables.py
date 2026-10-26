@@ -13,14 +13,19 @@ from harness import CHECK_FAILED, build, mutated, read, run  # noqa: E402
 CASES = ["read-numbers", "read-none", "write-replaces", "write-adds", "write-numbers", "write-escapes", "defaults",
          "not-unknown", "added-to-old-file"]
 
-SDL_STUB = """#include <stdbool.h>
+SDL_STUB = """#pragma once
+#include <stdbool.h>
 #include <stddef.h>
 const char *SDL_GetBasePath(void);
 void *SDL_LoadFile(const char *path, size_t *size);
 bool SDL_SaveFile(const char *path, const void *data, size_t size);
 void SDL_free(void *data);
+typedef struct SDL_PathInfo { long long size; long long modify_time; } SDL_PathInfo;
+bool SDL_GetPathInfo(const char *path, SDL_PathInfo *info);
 """
 PLATFORM_STUB = "void platform_log(const char *format, ...);\n"
+POSIX_STUB = "typedef unsigned int posix_ulong;\nint posix_command_line_argument(int index, char *buffer, posix_ulong size);\n"
+POSIX_SERVER_STUB = "int posix_server_private_file(const char *path);\n"
 
 # a fault in port_config.c and the case that must catch it
 NEGATIVE_CONTROLS = {
@@ -47,7 +52,8 @@ def generated(fault=None):
     source = read("port/linux/src/port_config.c").replace("#include <SDL3/SDL.h>", '#include "sdl_stub.h"')
     if fault:
         source = mutated(source, *fault)
-    return (("platform.h", PLATFORM_STUB), ("sdl_stub.h", SDL_STUB),
+    return (("platform.h", PLATFORM_STUB), ("sdl_stub.h", SDL_STUB), ("posix.h", POSIX_STUB),
+            ("posix_server.h", POSIX_SERVER_STUB),
             ("port_config.h", read("port/linux/src/port_config.h")),
             ("tomlc17.h", read("port/third_party/tomlc17/tomlc17.h")),
             ("tomlc17.inc", read("port/third_party/tomlc17/tomlc17.c")), ("port_config.inc", source))

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .embed_assets import hud_assets_build, hud_configure_inputs
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build
 from .ninja_syntax import Writer
 
 PORT_DIR = Path("port/linux")
@@ -29,12 +29,13 @@ def xdk_headers() -> List[Path]:
 
 def game_sources(config: Dict[str, Any]) -> List[Path]:
     """the game's C sources (port.json "game"): every one under its root but
-    those excluded"""
+    those excluded (a file, or a folder: a name ending in "/")"""
     game = config["game"]
-    excluded = set(game.get("exclude", []))
+    excluded = game.get("exclude", [])
     return sorted(
         source for source in Path(game["root"]).rglob("*.c")
-        if source.as_posix() not in excluded
+        if not any(source.as_posix() == name or (name.endswith("/") and source.as_posix().startswith(name))
+                   for name in excluded)
     )
 
 
@@ -131,6 +132,9 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 MBEDTLS_DIR = Path("port/third_party/mbedtls")
 # internet play's UPnP (port/linux/src/posix_upnp.c)
 MINIUPNPC_DIR = Path("port/third_party/miniupnpc")
+# the Custom Edition maps' Ogg Vorbis decoder (custom_edition_sounds.c),
+# compiled as the port's game units are
+STB_VORBIS_SOURCE = Path("port/third_party/stb_vorbis/stb_vorbis.c")
 # miniupnpc's own build's definitions (its Makefile), and a static library
 MINIUPNPC_DEFINES = ["-DMINIUPNP_STATICLIB", "-DMINIUPNPC_SET_SOCKET_TIMEOUT", "-DMINIUPNPC_GET_SRC_ADDR",
                      "-D_BSD_SOURCE", "-D_DEFAULT_SOURCE"]
@@ -141,22 +145,61 @@ def miniupnpc_sources() -> List[Path]:
     return sorted((MINIUPNPC_DIR / "src").glob("*.c"))
 
 
+def build_repository() -> str:
+    """the GitHub repository a build is made from, owner/name, which a client
+    tells the servers it joins (network_distributed.c): CI's
+    GITHUB_REPOSITORY, else the checkout's origin remote's (its credentials
+    left out: only the owner and the name are kept), else none"""
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if not repository:
+        try:
+            url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True,
+                                 timeout=10, check=False).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            url = ""
+        found = re.search(r"github\.com[:/]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/*$", url)
+        repository = found.group(1) if found else ""
+    return repository if re.fullmatch(r"[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}", repository) else ""
+
+
 def updater_defines(release: bool) -> str:
     """the self-updater's build (port/linux/src/updater.c): its number, from
     HALO_BUILD_NUMBER (tools/ci_build.py gives it for builds of main; none
     elsewhere, which never look for updates), its configuration, and the
-    GitHub repository whose releases it updates from, HALO_UPDATE_REPOSITORY
-    (tools/ci_build.py gives the one that built it, so that a fork's builds
-    update from the fork's releases; none: the updater's own)"""
+    repository it is made from (build_repository), and the GitHub repository
+    whose releases it updates from, HALO_UPDATE_REPOSITORY (tools/ci_build.py
+    gives the one that built it, so that a fork's builds update from the
+    fork's releases; none: the updater's own)"""
     number = os.environ.get("HALO_BUILD_NUMBER", "0")
     if not number.isdigit():
         number = "0"
     flavor = "release" if release else "debug"
-    defines = f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    defines = (f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\" '
+               f'-DHALO_BUILD_REPOSITORY=\\"{build_repository()}\\"')
     repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
     if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         defines += f' -DHALO_UPDATE_REPOSITORY=\\"{repository}\\"'
     return defines
+
+
+def configuration_defines(sln: Any) -> List[str]:
+    """what configure.py's options define for every unit of a native build:
+    --release (no assertions), --profile (the profiling build's recording,
+    port/linux/src/profile_trace.c)"""
+    defines = []
+    if getattr(sln, "port_release", False):
+        defines.append("-DHALO_RELEASE")
+    if getattr(sln, "port_profile", False):
+        defines.append("-DHALO_PROFILE")
+    return defines
+
+
+def check_profile_options(profile: bool, pgo: str) -> None:
+    """A profiling build is optimised with the committed profiles or none:
+    trained, a profile would record the profiling code's own paths."""
+    if profile and pgo == "train":
+        raise ValueError("--profile cannot be used with --pgo=train: train profiles with a normal build")
+
 
 PLATFORM_FLAGS = [
     "-std=gnu11",
@@ -284,8 +327,13 @@ def portable_sdl(n: Writer, sln: Any, build_dir: Path, cc: str) -> Tuple[List[st
     options = SDL_OPTIONS + ([f"-DCMAKE_C_COMPILER_LAUNCHER={launcher}"] if launcher else [])
     n.rule(
         name="linux_sdl3",
-        command=(f"cmake -S {sdl_source} -B {sdl_build} -G Ninja --fresh "
-                 f"-DCMAKE_TOOLCHAIN_FILE=$$PWD/{SYSROOT_TOOLCHAIN} -DHALO_SYSROOT=$$PWD/{sysroot} "
+        # (SDL's build takes the system root's include folders from
+        # pkg-config, which splits a path at its spaces: a checkout in a folder
+        # with a space in its name is said, rather than failing deep in SDL)
+        command=(f"case \"$$PWD\" in *\" \"*) echo \"SDL3: the portable build cannot be made in a folder "
+                 f"whose path has a space ($$PWD): move the checkout\" >&2; exit 1;; esac && "
+                 f"cmake -S {sdl_source} -B {sdl_build} -G Ninja --fresh "
+                 f"\"-DCMAKE_TOOLCHAIN_FILE=$$PWD/{SYSROOT_TOOLCHAIN}\" \"-DHALO_SYSROOT=$$PWD/{sysroot}\" "
                  f"-DCMAKE_C_COMPILER={cc} {' '.join(options)} > {build_dir}/sdl3-configure.log && "
                  f"ninja -C {sdl_build} > {build_dir}/sdl3-build.log && "
                  f"$python {SYSROOT_SCRIPT} --check-sdl "
@@ -478,6 +526,8 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
 
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
     embedded_assets = hud_assets_build(n, "linux", build_dir / "generated" / "hud_hires_assets.c")
+    # a dedicated server's admin page (port/assets/server_ui; port/linux/src/server_http.c)
+    embedded_assets += server_ui_build(n, "linux", build_dir / "generated" / "server_ui_assets.c")
 
     # the portable build's system root and SDL3, or the build machine's
     if getattr(sln, "port_portable", False):
@@ -491,8 +541,8 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     # (a debug build checks its stack frames, and stops at the first one
     # overrun, as it stops at the first failed assertion; a release build
     # does not, so that an overrun nobody has met cannot end a game)
-    abi = " ".join(LINUX_ABI_FLAGS + target + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False)
-                                               else ["-fstack-protector-strong"]))
+    abi = " ".join(LINUX_ABI_FLAGS + target + configuration_defines(sln)
+                   + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"]))
     port_include = PORT_DIR / "include"
     sdk_flags = f"-idirafter {XDK_INCLUDE}"
     libs = " ".join(f"-l{lib}" for lib in config.get("libraries", []))
@@ -544,6 +594,7 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
         # sources do (port/linux/game).
         for source in sorted(Path(config["game_sources"]).glob("*.c")):
             add_object(source, game_cflags)
+        add_object(STB_VORBIS_SOURCE, game_cflags)
 
         platform_dir = Path(config["platform_sources"])
         platform_cflags = " ".join([
@@ -562,22 +613,28 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
             sdk_flags,
         ])
         posix_cflags = " ".join(POSIX_FLAGS + target + [f"-I{platform_dir}"])
-        mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
+        # (with Mbed TLS's own locks, as built from its unchanged config by
+        # these defines: on Linux the self-updater's thread (posix_update.c)
+        # and internet play's (posix_dtls.c) both use it, and two threads
+        # setting up its PSA crypto or drawing on its random generator at
+        # once crashed it; the other builds use it on one thread)
+        mbedtls_include = f"-I{MBEDTLS_DIR / 'include'} -DMBEDTLS_THREADING_C -DMBEDTLS_THREADING_PTHREAD"
         for source in sorted(platform_dir.glob("*.c")):
-            if source.name == "posix_update.c":
+            if source.name in ("posix_update.c", "posix_dtls.c"):
                 add_object(source, f"{posix_cflags} {mbedtls_include}", posix=True)
             elif source.name == "posix_upnp.c":
                 add_object(source, f"{posix_cflags} -I{MINIUPNPC_DIR / 'include'} -DMINIUPNP_STATICLIB", posix=True)
             elif source.name.startswith("posix_"):
                 add_object(source, posix_cflags, posix=True)
-            elif source.name == "updater.c":
+            elif source.name in ("updater.c", "server_mode.c"):
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             else:
                 add_object(source, platform_cflags)
         for source in embedded_assets:
             add_object(source, platform_cflags)
-        # the self-updater's TLS (port/third_party/mbedtls), with the host's
-        # ABI as the posix_*.c that use it (and no loop turned into glibc's
+        # the self-updater's TLS and internet play's DTLS with browsers
+        # (port/third_party/mbedtls), with the host's ABI as the posix_*.c
+        # that use it (and no loop turned into glibc's
         # wcslen, which linux_link_check.py rejects: the game's wchar_t is
         # 16-bit)
         for source in sorted((MBEDTLS_DIR / "library").glob("*.c")):
@@ -684,6 +741,10 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     # internet play's MQTT brokers, a file beside the game (network.brokers_file)
     brokers = build_dir / "brokers.txt"
     n.build(outputs=brokers, rule="linux_copy", inputs=Path("port/assets/network/brokers.txt"))
+    # the master servers of dedicated servers, a file beside the game too
+    # (network.masters_file, server.masters_file)
+    masters = build_dir / "masters.txt"
+    n.build(outputs=masters, rule="linux_copy", inputs=Path("port/assets/network/masters.txt"))
     n.build(outputs="linux", rule="phony",
-            inputs=[output, brokers, validator, *sdl_outputs])
+            inputs=[output, brokers, masters, validator, *sdl_outputs])
     n.newline()

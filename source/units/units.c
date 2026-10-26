@@ -644,6 +644,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries.h"
+#include "infection.h" /* port: port/linux/game/infection.c */
 #include "units.h"
 
 #include "bipeds.h"
@@ -2156,6 +2157,10 @@ boolean unit_add_grenade_to_inventory(
 	boolean result = FALSE;
 	static boolean grenade_type_reported = FALSE;
 
+	/* port: an Infection zombie takes no grenades */
+	if (infection_unit_is_zombie(unit_index))
+		return FALSE;
+
 	match_assert(
 		"c:\\halo\\SOURCE\\units\\units.c",
 		7282,
@@ -2219,6 +2224,9 @@ boolean unit_add_equipment_to_inventory(
 		7330,
 		equipment_definition->equipment.powerup_type!=_equipment_powerup_grenade);
 
+	/* port: nor powerups */
+	if (infection_unit_is_zombie(unit_index))
+		return FALSE;
 	if (unit->unit.equipment_object_index!=NONE && replace==TRUE)
 	{
 		object_delete(unit->unit.equipment_object_index);
@@ -3054,6 +3062,9 @@ boolean unit_enter_seat(
 {
 	boolean result = FALSE;
 
+	/* port: and fights on foot */
+	if (infection_unit_is_zombie(unit_index))
+		return FALSE;
 	if (unit_can_enter_seat(unit_index, target_unit_index, seat_index, NULL))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
@@ -5102,20 +5113,18 @@ void unit_render_debug(
 		struct object_marker marker;
 		real mouth_aperture;
 
-		/*
-		 * BUG (original): January ignores the marker count and consumes the
-		 * output even when the requested head marker is absent. A safe,
-		 * intentionally nonmatching build should render only when this call
-		 * returns a value greater than zero.
-		 */
-		object_get_marker_by_name(unit_index, "head", &marker, 1);
-		mouth_aperture = unit->unit.mouth_aperture;
-		origin = marker.matrix.position;
-		render_debug_string_at_point(
-			FALSE,
-			&origin,
-			csprintf(temporary, "%.2f", mouth_aperture),
-			global_real_argb_orange);
+		/* port: the Xbox's bug fixed: it ignored the marker count and read
+		the marker of a unit with no head marker uninitialised */
+		if (object_get_marker_by_name(unit_index, "head", &marker, 1) > 0)
+		{
+			mouth_aperture = unit->unit.mouth_aperture;
+			origin = marker.matrix.position;
+			render_debug_string_at_point(
+				FALSE,
+				&origin,
+				csprintf(temporary, "%.2f", mouth_aperture),
+				global_real_argb_orange);
+		}
 	}
 
 	return;
@@ -6365,6 +6374,13 @@ void unit_record_damage(
 	short preserved_attacker_index;
 	short best_new_attacker_index;
 	boolean found_attacker;
+	struct player_datum *attacker_player = attacker_player_index != NONE ?
+		player_try_and_get(attacker_player_index) : NULL;
+
+	/* port: damage can outlive its player (an older checkpoint's): a handle
+	that is no player's now is neither recorded nor read */
+	if (!attacker_player)
+		attacker_player_index = NONE;
 
 	unit = unit_get(unit_index);
 	found_attacker = FALSE;
@@ -6445,9 +6461,10 @@ void unit_record_damage(
 	if (notify_ai && attacker_team != NONE &&
 		game_team_is_enemy(unit->object.owner_team_index, attacker_team))
 	{
-		if (attacker_player_index != NONE)
+		/* port: (the player looked up above) */
+		if (attacker_player)
 		{
-			player_unit_index = player_get(attacker_player_index)->unit_index;
+			player_unit_index = attacker_player->unit_index;
 			if (player_unit_index != NONE)
 			{
 				attacker_unit_index = player_unit_index;
@@ -7743,8 +7760,13 @@ boolean unit_drop_selected_weapon(
 		TEST_FLAG(weapon_definition_get(weapon_get(weapon_index)->definition_index)->weapon.flags,
 			_weapon_doesnt_count_toward_maximum_bit))
 	{
+		/* port: (an Infection zombie keeps its skull: infection.c) */
+		if (!infection_allow_weapon_drop(unit_index, unit_get_current_weapon_index(unit_index)))
+			return FALSE;
 		return unit_drop_current_weapon(unit_index, TRUE);
 	}
+	if (!infection_allow_weapon_drop(unit_index, weapon_index))
+		return FALSE;
 	unit_drop_item(unit_index, weapon_index);
 	unit->unit.weapon_object_indices[slot] = NONE;
 	unit->unit.desired_weapon_index = unit->unit.current_weapon_index!=NONE ?
@@ -8461,9 +8483,27 @@ boolean unit_add_weapon_to_inventory(
 				break;
 
 			case _unit_add_weapon_starting:
-				if (!TEST_FLAG(unit->unit.control_flags, _unit_control_weapon_primary_trigger_bit))
+				/* port: a second weapon, into the empty slot of a one-weapon
+				loadout, is the one in hand. While the trigger was down this
+				left the choice on the weapon already held, and the next
+				action put that choice back, so the new one stayed holstered. */
 				{
-					player_control_set_desired_weapon(unit_index, inventory_index);
+					boolean holding_another = FALSE;
+					short slot;
+
+					for (slot = 0; slot < MAXIMUM_WEAPONS_PER_UNIT; slot++)
+					{
+						if (slot != inventory_index &&
+							unit->unit.weapon_object_indices[slot] != NONE)
+						{
+							holding_another = TRUE;
+						}
+					}
+					if (holding_another ||
+						!TEST_FLAG(unit->unit.control_flags, _unit_control_weapon_primary_trigger_bit))
+					{
+						player_control_set_desired_weapon(unit_index, inventory_index);
+					}
 				}
 
 			case _unit_add_weapon_replace:
@@ -9063,8 +9103,11 @@ void unit_cause_player_melee_damage(
 						long hit_object_index = collision.object_index;
 						struct object_datum *hit_object = object_get(hit_object_index);
 
+						/* port: (an Infection zombie's skull hits a rider in an open
+						seat itself: infection.c) */
 						if (hit_object->object.type!=_object_type_weapon &&
-							hit_object->object.parent_object_index!=NONE)
+							hit_object->object.parent_object_index!=NONE &&
+							!infection_melee_rider_target(unit_index, hit_object_index))
 						{
 							hit_object_index = hit_object->object.parent_object_index;
 							hit_object = object_get(hit_object_index);
@@ -9174,6 +9217,9 @@ void unit_cause_player_melee_damage(
 			struct damage_data damage_data;
 
 			damage_data_new(&damage_data, melee_damage_effect_index);
+			/* port: an Infection zombie's skull's (a client's report the host
+			works out again: network_damage.c) */
+			damage_data.multiplier = infection_melee_multiplier(unit_index);
 			SET_FLAG(damage_data.flags, _damage_area_of_effect_bit, TRUE);
 			damage_data.location = unit->object.location;
 			damage_data.owner_object_index = unit_index;

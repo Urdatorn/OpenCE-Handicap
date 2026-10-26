@@ -105,6 +105,35 @@ const char *platform_custom_edition_root(void);
 out of an Xbox disc image into destination (sdl_platform.c), and quits if
 the player declines; nonzero once destination has one */
 BOOL platform_offer_game_data(const char *destination);
+/* what the data root's maps folder holds, which should be the Xbox maps
+(sdl_platform.c tells the player when it is not, rather than the game
+failing on Halo PC's ui.map) */
+enum
+{
+	_maps_folder_xbox,
+	/* its ui.map is Halo PC's (retail's, version 7, or Custom Edition's, 609) */
+	_maps_folder_halo_pc,
+	/* it has no ui.map (or one that is not a map) */
+	_maps_folder_no_ui,
+};
+#define PLATFORM_MAPS_FOLDER_NAMED 4
+struct platform_maps_folder
+{
+	int state;
+	/* the data root, whole */
+	char root[1024];
+	long ui_version;
+	/* Halo PC maps in maps/ itself, which play only from custom_maps: how
+	many, and the first PLATFORM_MAPS_FOLDER_NAMED's names */
+	long stray_pc_maps;
+	char stray_names[256];
+};
+void platform_maps_folder_check(struct platform_maps_folder *maps);
+/* asks the player, in a box of its own that waits for the answer (before
+the window opens, or between frames), with `count` buttons (3 at most: Android's),
+`default_index` Enter's and Escape's: the index of the one chosen, or -1
+when it cannot ask */
+int platform_ask(const char *title, const char *text, const char *const *labels, int count, int default_index);
 const char *platform_save_root(void);
 
 /* ---------- contiguous ("physical") memory
@@ -114,9 +143,10 @@ that window at start-up and hands out page-granular blocks from it, so the
 physical/virtual arithmetic the game and Direct3D rely on keeps working. */
 
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000UL
-#ifdef HALO_ANDROID
+#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
 /* 128 MB, a development kit's: Android's guest image is linked just above
-the window (port/android/include/halo_android_abi.h) */
+the window (port/android/include/halo_android_abi.h), and the web build's
+WebAssembly memory ends with it (tools/web_build.py) */
 #define PLATFORM_CONTIGUOUS_SIZE 0x08000000UL
 #else
 /* 512 MB on the desktop builds, whose caches outgrow the Xbox's (Custom

@@ -34,6 +34,8 @@ void platform_log(const char *format, ...)
 }
 
 /* SDL (sdl_stub.h): the folder config.toml is in, and its files */
+#include "sdl_stub.h"
+
 static char base_path[512];
 
 const char *SDL_GetBasePath(void)
@@ -72,6 +74,36 @@ bool SDL_SaveFile(const char *path, const void *data, size_t size)
 void SDL_free(void *data)
 {
 	free(data);
+}
+
+bool SDL_GetPathInfo(const char *path, SDL_PathInfo *info)
+{
+	struct stat status;
+
+	if (stat(path, &status))
+		return false;
+	if (info)
+	{
+		info->size = status.st_size;
+		info->modify_time = status.st_mtime;
+	}
+	return true;
+}
+
+/* the command line: none (no --server, no --config) */
+int posix_command_line_argument(int index, char *buffer, unsigned int size)
+{
+	(void)index;
+	(void)buffer;
+	(void)size;
+	return 0;
+}
+
+/* (a dedicated server's file made its user's alone: none here) */
+int posix_server_private_file(const char *path)
+{
+	(void)path;
+	return 1;
 }
 
 /* (tomlc17 is C11; the harness compiles C99, which clang gives _Static_assert) */
