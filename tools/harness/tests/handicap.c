@@ -503,6 +503,9 @@ int main(int argc, char **argv)
 		CHECK(handicap_command(" \"Ace\" 50%"), "refused: %s", console_text);
 		CHECK(write_count == 2 && !writes[1].has_old_key && !strcmp(writes[1].key, "Ace") && writes[1].value == 0.5,
 			"a new name written as %s = %g", writes[1].key, writes[1].value);
+		/* (1.1 as a float is 1.10000002384186 as a double: written as 1.1) */
+		CHECK(handicap_command(" nov 1.1"), "refused: %s", console_text);
+		CHECK(write_count == 3 && writes[2].value == 1.1, "1.1 written as %.15g", writes[2].value);
 		CHECK(!handicap_command(" nov two"), "\"two\" taken");
 		CHECK(handicap_command(" nov 9") && near(1.0f / handicap_damage_multiplier(novice), 4.0f), "9 is x%g, not x4",
 			1.0f / handicap_damage_multiplier(novice));

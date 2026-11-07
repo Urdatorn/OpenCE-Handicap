@@ -594,6 +594,7 @@ static void handicap_set(
 	short entry_index = handicap_entry_named(key);
 	char const *old_key = NULL;
 	struct handicap_entry *entry;
+	char written[32];
 
 	if (entry_index != NONE)
 	{
@@ -615,7 +616,10 @@ static void handicap_set(
 	}
 	entry->handicap = handicap;
 	handicap_generation++;
-	if (config_table_write_number(HANDICAP_SECTION, old_key, entry->key, handicap))
+	/* (the number written as the console shows it, 1.1, not the float's
+	1.10000002384186) */
+	snprintf(written, sizeof(written), "%g", handicap);
+	if (config_table_write_number(HANDICAP_SECTION, old_key, entry->key, strtod(written, NULL)))
 		console_printf(FALSE, "%s: x%g (and in config.toml)", shown_name, handicap);
 	else
 		console_warning("%s: x%g, but config.toml cannot be written: until the next game", shown_name, handicap);
