@@ -13004,6 +13004,24 @@ static char const *const hs_globals_denied_to_downloaded_maps[]=
 (hs_scenario_functions_check) */
 static boolean hs_scenario_downloaded = FALSE;
 
+/* port: whether a set of an external global a map may not set only turns a
+cheat off: a constant false given to a cheat_ global. Custom Edition maps
+(Firefight Descent's startup script) turn the cheats off so that their
+players play without them, and a cheat turned off gives the map nothing
+that the cheats are kept from maps for */
+static boolean hs_set_turns_cheat_off(
+	short global_index,
+	struct hs_syntax_node const *value)
+{
+	char const *name = hs_global_external_get(global_index)->name;
+
+	return !csstrncmp(name, "cheat_", 6) &&
+		value->type == _hs_type_boolean &&
+		TEST_FLAG(value->flags, _hs_syntax_node_primitive_bit) &&
+		!TEST_FLAG(value->flags, _hs_syntax_node_variable_bit) &&
+		!value->boolean_value;
+}
+
 static boolean hs_name_listed(
 	char const *name,
 	char const *const *list)
@@ -13040,6 +13058,7 @@ static short hs_syntax_node_check(
 {
 	struct hs_syntax_node const *predicate;
 	struct hs_syntax_node const *first_argument = NULL;
+	struct hs_syntax_node const *value;
 	struct hs_function_definition const *function;
 	short function_index;
 	short minimum_count;
@@ -13146,13 +13165,11 @@ static short hs_syntax_node_check(
 		}
 		/* (and its value is of the global's type, which the global is
 		read as) */
-		{
-			struct hs_syntax_node const *value = hs_syntax_try_get(first_argument->next_node_index);
-
-			if (!value || value->type != hs_global_get_type(designator))
-				return _hs_node_refusal_damaged;
-		}
-		if (from_map && (designator & 0x8000) && !hs_external_global_settable_by_maps(designator & 0x7FFF))
+		value = hs_syntax_try_get(first_argument->next_node_index);
+		if (!value || value->type != hs_global_get_type(designator))
+			return _hs_node_refusal_damaged;
+		if (from_map && (designator & 0x8000) && !hs_external_global_settable_by_maps(designator & 0x7FFF) &&
+			!hs_set_turns_cheat_off(designator & 0x7FFF, value))
 		{
 			*name = hs_global_external_get(designator & 0x7FFF)->name;
 			return _hs_node_refusal_global;

@@ -53,7 +53,7 @@ def console_state_tool(tmp_path_factory, request):
     console = read("port/linux/game/hs_console_state.h") + "\n" + re.sub(r'^#include .*$', '',
         read("port/linux/game/hs_console_state.inl"), flags=re.M)
     policy = "\n".join(function(hs, name) for name in
-        ("hs_syntax_try_get", "hs_syntax_node_check", "hs_console_syntax_node_valid"))
+        ("hs_syntax_try_get", "hs_set_turns_cheat_off", "hs_syntax_node_check", "hs_console_syntax_node_valid"))
     compile_code = "\n".join(function(compiler, name) for name in
         ("hs_parse_string", "hs_compile_initialize", "hs_compile_dispose", "hs_compile_expression"))
     mcc_calls = "\n".join(function(read("port/linux/game/mcc_scripts.c"), name) for name in

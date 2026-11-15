@@ -98,7 +98,8 @@ static struct {short minimum,maximum;} hs_special_form_argument_counts[1];
 #include "mcc_calls.inc"
 static int mcc_parameter_set_valid(struct hs_syntax_node const *node,struct hs_syntax_node const *value) {(void)node;(void)value;return -1;}
 static boolean hs_external_global_settable_by_maps(short i) {(void)i;return FALSE;}
-static struct {char const *name;} unused_global;
+static struct {char const *name;} unused_global={"unused"};
+#define csstrncmp strncmp
 #define hs_global_external_get(i) (&unused_global)
 #define DATUM_INDEX_TO_ABSOLUTE_INDEX(i) ((unsigned short)(i))
 /* The compiler and checker call the same variable bit by these names. */
