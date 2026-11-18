@@ -445,6 +445,27 @@ Each switch is logged (`player`: `Guven switched to the Blue team
 (!switch)`); there is no event for it, as there is none for the auto team
 balance's moves.
 
+### Games started from the chat
+
+`server.chat_games` names games that the players start from the chat, as
+`word=entry` pairs separated by commas; an entry is a rotation entry
+(`map:gametype+rule=value`). With
+
+```toml
+chat_games = 'firefight=custom_maps\Firefight-Descent:coop'
+```
+
+a player who says `!firefight` (the whole line, in either case) has the
+entry played as `sv_map` plays it: at once, or after the game whose start
+was sent, and the rotation goes on after it. The line goes to no one, not
+even when the player is muted; everyone sees "Guven asked for !firefight:
+now", or the player alone why it cannot be played. Any player may start
+one, and players of any build: their chat sends the line, and the server
+takes it. A game that never ends (a firefight) is left by the vote to end
+the game (`!endgame`), or `sv_map_next`. Each one is logged (`chat`:
+`Guven asked for !firefight: custom_maps\Firefight-Descent:coop (now)`).
+It is empty (none) by default.
+
 ### Updates
 
 `server.auto_update` is `install` by default (the Docker image's, `check`:

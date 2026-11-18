@@ -167,6 +167,11 @@ static struct
 	/* debug.network_test_chat's, and the lines said this game */
 	real chat_time;
 	short chat_lines_said;
+	/* debug.network_test_say's line, its tick (NONE for none), and whether
+	it was said */
+	char say_line[64];
+	long say_time;
+	boolean said;
 	long score_to_win;
 	long logged_time;
 	boolean public_game;
@@ -256,6 +261,19 @@ static void network_test_read_settings(
 	network_test.vehicle_time = (real)config_real("debug.network_test_vehicle");
 	network_test.pickup_time = (real)config_real("debug.network_test_pickup");
 	network_test.chat_time = (real)config_real("debug.network_test_chat");
+	/* ("<seconds> <line>") */
+	{
+		char const *say = config_string("debug.network_test_say");
+		char *rest = NULL;
+		double seconds = strtod(say, &rest);
+
+		network_test.say_time = NONE;
+		if (rest && rest != say && *rest == ' ' && rest[1] && seconds >= 0.0)
+		{
+			network_test.say_time = (long)(seconds * TICKS_PER_SECOND);
+			snprintf(network_test.say_line, sizeof(network_test.say_line), "%s", rest + 1);
+		}
+	}
 	snprintf(network_test.pickup_weapon, sizeof(network_test.pickup_weapon), "%s",
 		config_string("debug.network_test_pickup_weapon"));
 	network_test.score_to_win = (long)config_integer("debug.network_test_score");
@@ -1213,6 +1231,14 @@ void network_test_update(
 
 				test_input_hold_action(hold);
 			}
+		}
+		/* debug.network_test_say: this machine's player says its line to
+		everyone, once, that many seconds into a game */
+		if (network_test.say_time != NONE && !network_test.said && game_time_get() >= network_test.say_time)
+		{
+			platform_log("network test: saying \"%s\"", network_test.say_line);
+			network_chat_say(_chat_channel_everyone, network_test.say_line);
+			network_test.said = TRUE;
 		}
 		/* debug.network_test_chat: each machine's player says a line to
 		everyone that many seconds in, one to the team two seconds on, and

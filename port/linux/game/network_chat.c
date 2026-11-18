@@ -66,7 +66,9 @@ mutes.
 
 A dedicated server takes a player's "!switch" or "!team" (the whole line)
 as their asking to change teams (server_team_switch.c): the line is sent on
-to no one, and the host's notices say what came of it.
+to no one, and the host's notices say what came of it. So it takes a
+"!<word>" of server.chat_games as the asking for that word's game
+(server_chat_games.c).
 */
 
 #include "controller_remap.h"
@@ -98,6 +100,7 @@ to no one, and the host's notices say what came of it.
 #include "text_filter.h"
 #include "halo_keyboard.h"
 #include "server_director.h"
+#include "server_chat_games.h"
 #include "server_team_switch.h"
 
 #include <stdio.h>
@@ -1706,6 +1709,20 @@ void network_chat_handle_up(
 			chat_host_notice(machine_index, notice);
 		}
 		return;
+	}
+	/* (a dedicated server's player's "!<word>" of server.chat_games, the
+	whole line, muted or not: said to no one, its game played next and
+	everyone told, or told why not: server_chat_games.c) */
+	if (halo_server_mode())
+	{
+		char notice[CHAT_TEXT_SIZE];
+		short game = server_chat_game(text, name, notice, (long)sizeof(notice));
+
+		if (game != _server_chat_game_none)
+		{
+			chat_host_notice(game == _server_chat_game_played ? NONE : machine_index, notice);
+			return;
+		}
 	}
 	if ((mute = chat_mute_find(chat_mutes, NUMBEROF(chat_mutes), name, now)) != NULL)
 	{

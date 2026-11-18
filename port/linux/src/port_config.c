@@ -934,6 +934,11 @@ static const struct config_setting config_settings[] =
 	{ "server.team_switch_cooldown_seconds", _config_integer, "30", "HALO_SERVER_TEAM_SWITCH_COOLDOWN_SECONDS",
 		_environment_value, _platform_server,
 		"Seconds a player waits after a !switch before another (0 to 3600)." },
+	{ "server.chat_games", _config_string, "\"\"", "HALO_SERVER_CHAT_GAMES", _environment_value, _platform_server,
+		"Games the players start from the chat: word=entry, separated by\n"
+		"commas (firefight=custom_maps\\Firefight-Descent:coop). A player who\n"
+		"says !firefight has the entry played as sv_map plays it; empty for\n"
+		"none." },
 	{ "server.motd", _config_string, "\"\"", "HALO_SERVER_MOTD", _environment_value, _platform_server,
 		"A notice each machine is shown as it joins (127 characters); empty for\n"
 		"none." },
@@ -1181,6 +1186,9 @@ static const struct config_setting config_settings[] =
 		"host seats the last two players in one first), then the host mutes and\n"
 		"unmutes a player, refuses a link and turns the chat off, and the\n"
 		"clients type on the on-screen keyboard (port/linux/NETCODE.md); 0 never." },
+	{ "debug.network_test_say", _config_string, "\"\"", "HALO_NETWORK_TEST_SAY", _environment_value, _platform_all,
+		"\"<seconds> <line>\": this many seconds into an automated test game this\n"
+		"machine's player says the line to everyone, once; empty for none." },
 	{ "debug.network_test_name", _config_string, "\"\"", "HALO_NETWORK_TEST_NAME", _environment_value, _platform_all,
 		"The name this machine's player takes in an automated test game (ASCII);\n"
 		"empty keeps its profile's." },
