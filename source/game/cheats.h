@@ -48,6 +48,10 @@ void cheats_dispose(
 	void);
 void cheats_dispose_from_old_map(
 	void);
+void cheats_note_set(
+	void const *address,
+	boolean before,
+	boolean by_map);
 void cheats_update(
 	void);
 void cheats_network_client_enforce(

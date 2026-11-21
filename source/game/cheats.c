@@ -93,6 +93,13 @@ static char cheat_strings[MAXIMUM_CHEATS][MAXIMUM_CHEAT_LENGTH] = {0};
 /* January emits this otherwise unreferenced byte after cheat_strings.
  * Its original name and purpose are unknown; the name is descriptive only. */
 static boolean cheats_unused_flag = FALSE;
+/* port: the cheats a map's scripts changed (cheats_note_set), and what each
+was before the map first changed it: cheats_dispose_from_old_map puts them
+back, so that a map's cheat (Firefight Descent's cheat_deathless_player)
+ends with it and is not kept by the games after it on that machine */
+#define CHEAT_COUNT (long)(sizeof(struct cheat_globals) / sizeof(boolean))
+static boolean cheats_set_by_map[CHEAT_COUNT];
+static boolean cheats_before_map[CHEAT_COUNT];
 
 /* ---------- code */
 
@@ -113,6 +120,45 @@ void cheats_dispose(
 void cheats_dispose_from_old_map(
 	void)
 {
+	/* port: the map's cheats end with it (cheats_note_set) */
+	boolean *values = (boolean *)&cheat;
+	long index;
+
+	for (index = 0; index < CHEAT_COUNT; index++)
+	{
+		if (cheats_set_by_map[index])
+			values[index] = cheats_before_map[index];
+	}
+	csmemset(cheats_set_by_map, 0, sizeof(cheats_set_by_map));
+
+	return;
+}
+
+/* port: a set of an external global (hs_evaluate_set), with the value it had
+before. A map's script's set of a cheat is undone when the map ends
+(cheats_dispose_from_old_map); a set from the console is the player's own
+and is kept, a set by the map before it too */
+void cheats_note_set(
+	void const *address,
+	boolean before,
+	boolean by_map)
+{
+	boolean const *values = (boolean const *)&cheat;
+	long index;
+
+	if ((boolean const *)address < values || (boolean const *)address >= values + CHEAT_COUNT)
+		return;
+	index = (long)((boolean const *)address - values);
+	if (!by_map)
+	{
+		cheats_set_by_map[index] = FALSE;
+	}
+	else if (!cheats_set_by_map[index])
+	{
+		cheats_set_by_map[index] = TRUE;
+		cheats_before_map[index] = before;
+	}
+
 	return;
 }
 

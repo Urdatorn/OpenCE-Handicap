@@ -284,6 +284,7 @@ symbols in this file:
 #include "interface/terminal.h"
 #include "main/console.h"
 #include "game/game.h"
+#include "game/cheats.h"
 #include "mcc_scripts.h" /* port: port/linux/game/mcc_scripts.h */
 
 /* ---------- constants */
@@ -2291,7 +2292,17 @@ void hs_evaluate_set(
 	}
 	else
 	{
+		/* port: a cheat a map's script sets ends with the map
+		(cheats_note_set) */
+		struct hs_external_global_definition *external =
+			HS_GLOBAL_DESIGNATOR_IS_EXTERNAL(variable->data) && type==_hs_type_boolean ?
+				hs_global_external_get(HS_GLOBAL_DESIGNATOR_TO_INDEX((short)variable->data)) :
+				NULL;
+		boolean before = external && external->address ? *(boolean *)external->address : FALSE;
+
 		hs_global_reconcile_write((short)variable->data);
+		if (external && external->address)
+			cheats_note_set(external->address, before, thread->type==_hs_thread_type_script);
 		if (type==_hs_type_object_list)
 			object_list_add_reference(hs_global_evaluate((short)variable->data));
 
