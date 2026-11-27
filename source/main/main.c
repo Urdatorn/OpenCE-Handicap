@@ -2332,11 +2332,13 @@ static void main_lost_map_private(
 		main_globals.lost_map = FALSE;
 		main_globals.loss_timer = 0;
 		/* port: the co-op host chooses whether a team wipe rewinds or only
-		respawns. Scripted failures still revert, or their cutscene would
-		never end. A missing save falls back to checkpoint positions. */
+		respawns; Iron's always rewinds (network_coop_iron_reverts). Scripted
+		failures still revert, or their cutscene would never end. A missing
+		save falls back to checkpoint positions. */
 		if (game_connection() != _game_connection_network_server)
 			game_state_revert();
-		else if ((players_are_all_dead() && !network_coop_wipe_reverts()) || !main_coop_host_revert())
+		else if ((players_are_all_dead() && !network_coop_wipe_reverts() && !network_coop_iron_reverts()) ||
+			!main_coop_host_revert())
 			players_respawn_at_checkpoint();
 	}
 	return;

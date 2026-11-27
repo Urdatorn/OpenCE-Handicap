@@ -747,7 +747,8 @@ static char const *const settable_settings[] =
 	"network.vote_end_game", "network.votekick_threshold", "network.votekick_percent", "network.votekick_minutes", "network.votekick_ban_minutes", "network.map_share", "network.map_share_upload",
 	"network.public_address", "network.coop_friendly_fire", "network.coop_player_collisions",
 	"network.vehicle_riding", "server.vehicle_riding_override_gametype",
-	"network.coop_ally_friendly_fire", "network.coop_team_wipe", "network.shield_effects", "network.fire_origins",
+	"network.coop_ally_friendly_fire", "network.coop_team_wipe", "network.coop_iron", "network.coop_iron_except",
+	"network.shield_effects", "network.fire_origins",
 };
 
 /* those of them the owner's console alone changes (the standard input, the

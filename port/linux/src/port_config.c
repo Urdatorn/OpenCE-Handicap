@@ -759,6 +759,15 @@ static const struct config_setting config_settings[] =
 		"game private. Reverting requires a saved checkpoint with the current\n"
 		"players and machines; otherwise they respawn without a world reset.\n"
 		"TEAM WIPE in Server Setup > Co-op Options writes its choice here." },
+	{ "network.coop_iron", _config_boolean, "false", "HALO_NET_COOP_IRON", _environment_value, _platform_all,
+		"Iron, as the skull plays in MCC's co-op: when a co-op player dies,\n"
+		"everyone goes back to the last checkpoint, in a PUBLIC game too. Only\n"
+		"with a checkpoint of the current players and machines; else the dead\n"
+		"respawn beside a teammate. The host's setting." },
+	{ "network.coop_iron_except", _config_string, "\"\"", "HALO_NET_COOP_IRON_EXCEPT", _environment_value,
+		_platform_all,
+		"Levels played without Iron, split by commas (\"a30,\n"
+		"custom_maps\\\\Firefight-Descent\"): a map that saves seldom." },
 	{ "network.coop_friendly_fire", _config_string, "\"on\"", "HALO_NET_COOP_FRIENDLY_FIRE", _environment_value,
 		_platform_all,
 		"Whether the players of an online co-op game hurt each other: \"off\",\n"

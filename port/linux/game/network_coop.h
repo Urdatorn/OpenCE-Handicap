@@ -51,6 +51,11 @@ void network_coop_restore_players(void);
 void network_coop_checkpoint_saved(void);
 /* main.c: host team-wipe policy, including checkpoint roster compatibility. */
 boolean network_coop_wipe_reverts(void);
+/* players.c, main.c: whether a co-op player's death reverts the team's
+checkpoint (network.coop_iron), on this level */
+boolean network_coop_iron_reverts(void);
+/* whether a level is in a list of names split by ',' or ';' */
+boolean network_coop_level_listed(char const *list, char const *level);
 /* whether the players collide with each other: FALSE in a co-op game whose
 host set Server Setup's PLAYER COLLISIONS off (bipeds.c, collisions.c) */
 boolean network_coop_player_collisions(void);

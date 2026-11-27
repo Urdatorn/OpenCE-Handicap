@@ -512,6 +512,8 @@ struct data_array *team_data;
 struct data_array *player_data;
 static long machine_to_player_table[MAXIMUM_NETWORK_MACHINE_COUNT][MAXIMUM_LOCAL_PLAYERS] = { 0 };
 static boolean players_lost_map_started = FALSE;
+/* port: every player's deaths, summed, at the last tick (players_coop_iron_death) */
+static long players_coop_iron_deaths = 0;
 static short over_shield_screen_flash_fade_function = 0;
 static real over_shield_screen_flash_alpha = 0.f;
 static real over_shield_screen_flash_green = 0.f;
@@ -2534,6 +2536,42 @@ boolean players_respawn_coop(
 		players_globals->respawn_failure = 0;
 
 result_complete:
+	return result;
+}
+
+/* port: whether a player died this tick and is still dead (Iron,
+network_coop_iron_reverts): the players' deaths, summed, went up. A revert
+takes them back down, so a player the checkpoint holds dead does not
+revert it again; one who has not spawned yet, or quit, is not dead */
+static boolean players_coop_iron_new_death(
+	long deaths,
+	long deaths_before,
+	boolean someone_dead)
+{
+	return deaths > deaths_before && someone_dead;
+}
+
+static boolean players_coop_iron_death(
+	void)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+	long deaths = 0;
+	boolean someone_dead = FALSE;
+	boolean result;
+
+	data_iterator_new(&iterator, player_data);
+	while ((player = data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->quit_out_of_game)
+			continue;
+		deaths += player->statistics.deaths;
+		if (player->unit_index == NONE && player->statistics.deaths != 0)
+			someone_dead = TRUE;
+	}
+	result = players_coop_iron_new_death(deaths, players_coop_iron_deaths, someone_dead);
+	players_coop_iron_deaths = deaths;
+
 	return result;
 }
 
@@ -5294,7 +5332,15 @@ void players_update_after_game(
 		}
 	}
 
-	if (players_globals->all_dead)
+	/* port: network co-op's Iron: a player's death loses the level for all
+	(network_coop_iron_reverts) */
+	if (players_coop_iron_death() && !players_lost_map_started && network_coop_iron_reverts())
+	{
+		error(_error_silent, "co-op: Iron: a player died, everyone goes back to the checkpoint");
+		main_lost_map();
+		players_lost_map_started = TRUE;
+	}
+	else if (players_globals->all_dead)
 	{
 		if (!game_engine_running() && !players_lost_map_started && !network_game_distributed_client())
 		{

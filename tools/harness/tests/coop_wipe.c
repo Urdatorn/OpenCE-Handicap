@@ -57,6 +57,9 @@ static int mcc_checkpoint_capture(void *image,unsigned long bytes,unsigned long 
 static long game_time_get(void){return tick;}
 static boolean game_time_get_paused(void){return paused;}
 static boolean players_are_all_dead(void){return all_dead;}
+/* (network.coop_iron on this level, with a checkpoint of the team) */
+static boolean iron;
+static boolean network_coop_iron_reverts(void){return iron;}
 static boolean main_coop_host_revert(void){if(!game_state_globals.saved_game_valid)return FALSE;reverts++;return TRUE;}
 static void players_respawn_at_checkpoint(void){respawns++;}
 static void game_state_revert(void){reverts++;}
@@ -139,6 +142,10 @@ int main(int argc,char **argv)
   wipe();CHECK(reverts==2&&!respawns,"second wipe failed");
   setup();main_lost_map();paused=TRUE;tick=92;main_lost_map_private();CHECK(!reverts,"pause advanced death timer");
   paused=FALSE;main_lost_map_private();tick=184;main_lost_map_private();CHECK(reverts==1,"resumed death timer stalled");
+ } else CASE("iron") {
+  /* Iron's loss reverts where a team wipe only respawns */
+  policy="respawn";iron=TRUE;wipe();CHECK(reverts==1&&!respawns,"Iron's loss only respawned");
+  setup();policy="respawn";iron=FALSE;wipe();CHECK(!reverts&&respawns==1,"a wipe without Iron reverted");
  } else CASE("failure") {
   policy="respawn";all_dead=FALSE;add_player();wipe();CHECK(reverts==1&&!respawns,"scripted failure used wipe policy/roster guard");
  } else return 2;

@@ -2366,6 +2366,71 @@ boolean network_coop_wipe_reverts(
 	return TRUE;
 }
 
+/* whether the level is one of the list's: names split by ',' or ';',
+spaces around them left out, letters' case ignored ("a30,
+custom_maps\Firefight-Descent") */
+boolean network_coop_level_listed(
+	char const *list,
+	char const *level)
+{
+	long level_length;
+
+	if (!list || !level)
+		return FALSE;
+	level_length = (long)strlen(level);
+	while (*list)
+	{
+		char const *start = list;
+		char const *end;
+		long index;
+
+		while (*list && *list != ',' && *list != ';')
+			list++;
+		end = list;
+		if (*list)
+			list++;
+		while (start < end && (*start == ' ' || *start == '\t'))
+			start++;
+		while (end > start && (end[-1] == ' ' || end[-1] == '\t'))
+			end--;
+		if (end - start != level_length)
+			continue;
+		for (index = 0; index < level_length; index++)
+		{
+			char a = start[index];
+			char b = level[index];
+
+			if ((a >= 'A' && a <= 'Z' ? a - 'A' + 'a' : a) != (b >= 'A' && b <= 'Z' ? b - 'A' + 'a' : b))
+				break;
+		}
+		if (index == level_length)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+/* Iron (network.coop_iron), as MCC's skull plays in co-op: a player's
+death sends everyone back to the last checkpoint, as all dying does
+(players.c). Only where it can: on the host, on a level not in
+network.coop_iron_except (Firefight Descent, which saves only as it starts),
+with a checkpoint of the current players and machines; else the dead
+respawn beside a teammate as without it. In a PUBLIC game too, which a team
+wipe there only respawns (network_coop_wipe_reverts). */
+boolean network_coop_iron_reverts(
+	void)
+{
+	struct network_game *game;
+
+	if (!coop_host() || !config_boolean("network.coop_iron") || !(game = network_game_get_game()) ||
+		network_coop_level_listed(config_string("network.coop_iron_except"), game->map.name))
+	{
+		return FALSE;
+	}
+
+	return checkpoint_players_match();
+}
+
 /* A network game on a campaign scenario with no game engine. Checking the
 scenario matters: the main menu's scene keeps running while a network game
 is set up, also with no game engine, and it is not co-op. */

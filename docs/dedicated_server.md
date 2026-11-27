@@ -272,7 +272,8 @@ these settings, which `sv_settings` and `GET /api/settings` list:
 `network.votekick_ban_minutes`, `network.map_share`,
 `network.map_share_upload`, `network.public_address`,
 `network.coop_friendly_fire`, `network.coop_player_collisions`,
-`network.coop_ally_friendly_fire`, `network.coop_team_wipe`, `network.shield_effects`,
+`network.coop_ally_friendly_fire`, `network.coop_team_wipe`, `network.coop_iron`,
+`network.coop_iron_except`, `network.shield_effects`,
 `network.fire_origins` and `network.vehicle_riding`. Of them,
 `server.status_file`, `server.auto_update` and `server.log_addresses` need
 the owner role: from the web's admin, `sv_set` of one of them (`POST
