@@ -5885,9 +5885,14 @@ static boolean lobby_browser_select(struct widget_instance *widget, short contro
 	}
 	if (!game->open || !config_boolean("network.online"))
 		return campaign_fail();
-	/* (a game with a password: its screen asks for it, then joins) */
+	/* (a game with a password: its screen asks for it, then joins; one whose
+	password this machine remembers joins at once: p2p_listing_unlock_remembered) */
 	if (game->locked)
 	{
+		struct p2p_listing unlocked = *game;
+
+		if (p2p_listing_unlock_remembered(&unlocked))
+			return lobby_browser_join(&unlocked, controller) || campaign_fail();
 		lobby_browser.password_game = *game;
 		lobby_browser.controller = controller;
 		return ui_widget_port_open(widget, PASSWORD_NAME, widget_deleted);
