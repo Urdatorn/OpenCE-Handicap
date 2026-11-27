@@ -193,6 +193,7 @@ BUILTINS = {
     "race": ("race", False, "Race"), "team_race": ("race", True, "Team Race"), "rally": ("race", False, "Rally"),
     "team_rally": ("race", True, "Team Rally"),
     "swat": ("slayer", True, "SWAT"), "infection": ("slayer", True, "Infection"), "gun_game": ("slayer", False, "Gun Game"),
+    "sticky": ("slayer", False, "Sticky"),
     "hardcore": ("slayer", True, "Hardcore"), "hardcore_ctf": ("ctf", True, "HC CTF"),
     "hardcore_oddball": ("oddball", True, "HC Oddball"), "hardcore_king": ("king", True, "HC King"),
 }

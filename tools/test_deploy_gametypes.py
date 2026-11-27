@@ -21,7 +21,7 @@ GAMETYPES = sorted((ROOT / "deploy/gametypes").glob("*.toml"))
 # (game_modes.c's game_modes_gametype: the builder each of OpenCE's
 # gametypes starts from; checked against server_gametypes.c's list below)
 OPENCE_ENGINES = {
-    "swat": "slayer", "infection": "slayer", "gun_game": "slayer", "hardcore": "slayer",
+    "swat": "slayer", "infection": "slayer", "gun_game": "slayer", "sticky": "slayer", "hardcore": "slayer",
     "hardcore_ctf": "ctf", "hardcore_oddball": "oddball", "hardcore_king": "king",
 }
 

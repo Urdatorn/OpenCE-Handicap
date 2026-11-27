@@ -9129,8 +9129,9 @@ static void game_engine_update_item_spawn(
 				struct object_placement_data placement_data;
 				long object_index;
 
-				/* port: the gametype's no weapons on the map */
-				if (definition_index != NONE && game_variant_options_get()->no_map_weapons &&
+				/* port: the gametype's no weapons on the map (or Sticky's:
+				game_modes.c) */
+				if (definition_index != NONE && game_modes_no_map_weapons() &&
 					object_definition_get(definition_index)->object.type == _object_type_weapon)
 				{
 					continue;

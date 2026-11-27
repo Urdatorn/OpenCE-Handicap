@@ -146,7 +146,12 @@ int main(int argc,char **argv)
   CHECK(game_modes_variant_mode(&variant,&options)==_game_mode_gun_game,"Gun Game, free for all");
   variant.universal_variant.teams=TRUE;
   CHECK(game_modes_variant_mode(&variant,&options)==_game_mode_none,"no Gun Game on teams");
-  variant.universal_variant.teams=FALSE;variant.game_engine_index=game_engine_ctf;
+  options.mode=_game_mode_sticky;
+  CHECK(game_modes_variant_mode(&variant,&options)==_game_mode_sticky,"Sticky, teams");
+  CHECK(!wcscmp(game_modes_kind_name(game_engine_slayer,_game_mode_sticky,FALSE),L"STICKY"),"Sticky's name");
+  variant.universal_variant.teams=FALSE;
+  CHECK(game_modes_variant_mode(&variant,&options)==_game_mode_sticky,"Sticky, free for all");
+  variant.game_engine_index=game_engine_ctf;
   CHECK(game_modes_variant_mode(&variant,&options)==_game_mode_none,"Slayer's modes only");
   CHECK(game_modes_variant_mode(NULL,&options)==_game_mode_none&&game_modes_variant_mode(&variant,NULL)==_game_mode_none,
    "none without a gametype");

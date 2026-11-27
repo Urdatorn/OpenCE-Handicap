@@ -65,8 +65,8 @@ short game_modes_mode(void);
 /* whether it plays by Hardcore's rules */
 boolean game_modes_hardcore(void);
 /* the game engine a mode plays with: Infection's and Gun Game's are
-Slayer's with their own rules; SWAT's variant has no shields
-(game_engine_initialize) */
+Slayer's with their own rules; SWAT's variant has no shields, Sticky's
+infinite grenades (game_engine_initialize) */
 struct game_engine *game_modes_engine(struct game_engine *engine);
 /* a player's spawn, after its starting equipment (game_engine_postspawn_player_update) */
 void game_modes_postspawn(long player_index);
@@ -80,6 +80,9 @@ boolean game_modes_killed_by_melee(void);
 /* a shot's hit on a player's head (a bullet's, a plasma bolt's, a needle's,
 not a melee's or an explosion's) kills at once (SWAT) */
 boolean game_modes_headshot_kills(long object_index, boolean shot);
+/* no weapons spawn on the map: the gametype's no_map_weapons, or Sticky
+(game_engine.c's netgame equipment) */
+boolean game_modes_no_map_weapons(void);
 /* the motion sensor is not drawn (Hardcore) */
 boolean game_modes_motion_sensor_hidden(void);
 /* no aim assist: neither autoaim nor magnetism (Hardcore) */

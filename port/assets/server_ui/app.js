@@ -40,7 +40,7 @@ const ENGINES = {
   race: 'race', team_race: 'race', rally: 'race', team_rally: 'race',
   ffa: 'slayer', ffa_slayer: 'slayer', teamslayer: 'slayer', tslayer: 'slayer', koth: 'king', team_koth: 'king',
   iron_ctf: 'ctf', teamrace: 'race', teamoddball: 'oddball',
-  swat: 'slayer', infection: 'slayer', gun_game: 'slayer', hardcore: 'slayer', hardcore_ctf: 'ctf',
+  swat: 'slayer', infection: 'slayer', gun_game: 'slayer', sticky: 'slayer', hardcore: 'slayer', hardcore_ctf: 'ctf',
   hardcore_oddball: 'oddball', hardcore_king: 'king',
 };
 // the settings the server's own console alone changes (server_commands.c's

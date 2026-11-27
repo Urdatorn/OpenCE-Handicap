@@ -1,7 +1,7 @@
 /*
 GAME_MODES.C
 
-OpenCE's gametypes: SWAT, Infection and Gun Game, modes of Slayer, and
+OpenCE's gametypes: SWAT, Infection, Gun Game and Sticky, modes of Slayer, and
 Hardcore, rules over any game engine's. Which a gametype plays is in its PC
 options (game_engine.h's struct game_variant_options, from mode on), which a
 saved gametype keeps (playlist_profile.c), the network game carries to every
@@ -16,6 +16,9 @@ machine (network_game_manager.h) and the game plays by
   the zombies win when no human is left, the humans when the time runs out.
 - Gun Game (gun_game.c): free for all. Each kill gives the killer the next
   weapon of a list; a kill with the last wins.
+- Sticky: plasma grenades only. Players spawn with no weapon and no
+  fragmentation grenades, the grenades never run out, and nothing lies on
+  the map but powerups: a stuck grenade, or a melee, kills.
 - Hardcore: no motion sensor, no aim assist, and a kill restores the
   killer's health and shields.
 
@@ -62,6 +65,7 @@ enum
 	_gametype_swat = 0,
 	_gametype_infection,
 	_gametype_gun_game,
+	_gametype_sticky,
 	_gametype_hardcore_slayer,
 	_gametype_hardcore_ctf,
 	_gametype_hardcore_oddball,
@@ -83,6 +87,7 @@ static struct
 	{ "swat", L"SWAT", L"SWAT" },
 	{ "infection", L"Infection", L"Infection" },
 	{ "gun_game", L"Gun Game", L"Gun Game" },
+	{ "sticky", L"Sticky", L"Sticky" },
 	{ "hardcore", L"Hardcore Slayer", L"Hardcore" },
 	{ "hardcore_ctf", L"Hardcore CTF", L"HC CTF" },
 	{ "hardcore_oddball", L"Hardcore Oddball", L"HC Oddball" },
@@ -136,6 +141,7 @@ void game_modes_gametype(
 		*variant = *build_game_variant_team_king(&temporary);
 		break;
 	case _gametype_gun_game:
+	case _gametype_sticky:
 		*variant = *build_game_variant_slayer(&temporary);
 		break;
 	default:
@@ -172,6 +178,16 @@ void game_modes_gametype(
 		variant->universal_variant.vehicle_set = VEHICLE_SET_NONE;
 		variant->universal_variant.respawn_time = 90;
 		variant->universal_variant.suicide_penalty = 0;
+		options->no_map_weapons = TRUE;
+		break;
+	case _gametype_sticky:
+		options->mode = _game_mode_sticky;
+		SET_FLAG(variant->universal_variant.flags, _game_variant_infinite_grenades_bit, TRUE);
+		variant->universal_variant.vehicle_set = VEHICLE_SET_NONE;
+		variant->universal_variant.respawn_time = 90;
+		options->loadout = _loadout_custom;
+		options->primary_weapon = _loadout_weapon_none;
+		options->secondary_weapon = _loadout_weapon_none;
 		options->no_map_weapons = TRUE;
 		break;
 	default:
@@ -276,6 +292,8 @@ short game_modes_variant_mode(
 		return variant->universal_variant.teams ? _game_mode_infection : _game_mode_none;
 	case _game_mode_gun_game:
 		return !variant->universal_variant.teams ? _game_mode_gun_game : _game_mode_none;
+	case _game_mode_sticky:
+		return _game_mode_sticky;
 	}
 	return _game_mode_none;
 }
@@ -300,6 +318,7 @@ wchar_t const *game_modes_kind_name(
 		{ { L"SWAT", L"SWAT" }, { L"HARDCORE SWAT", L"HC SWAT" } },
 		{ { L"INFECTION", L"INFECTION" }, { L"HARDCORE INFECTION", L"HC INFECTION" } },
 		{ { L"GUN GAME", L"GUN GAME" }, { L"HARDCORE GUN GAME", L"HC GUN GAME" } },
+		{ { L"STICKY", L"STICKY" }, { L"HARDCORE STICKY", L"HC STICKY" } },
 	};
 	static wchar_t const *const hardcore_names[][2] =
 	{
@@ -365,8 +384,29 @@ struct game_engine *game_modes_engine(
 		return infection_engine_get(engine);
 	case _game_mode_gun_game:
 		return gun_game_engine_get(engine);
+	case _game_mode_sticky:
+		/* (Sticky's grenades never run out, whatever its variant's) */
+		SET_FLAG(game_engine_get_variant()->universal_variant.flags, _game_variant_infinite_grenades_bit, TRUE);
+		break;
 	}
 	return engine;
+}
+
+/* Sticky: a player spawned with no weapon (a gametype's loadout given
+anyway is taken back, by the host, which gives weapons) and no fragmentation
+grenades, the plasma grenades in hand */
+static void game_modes_sticky_postspawn(
+	long player_index)
+{
+	struct player_datum *player = player_get(player_index);
+	struct unit_datum *unit;
+
+	if (player->unit_index == NONE || !(unit = unit_try_and_get(player->unit_index)))
+		return;
+	if (!network_game_distributed_client())
+		unit_delete_all_weapons(player->unit_index);
+	unit->unit.grenade_counts[_unit_grenade_human_fragmentation] = 0;
+	unit->unit.current_grenade_index = _unit_grenade_covenant_plasma;
 }
 
 void game_modes_postspawn(
@@ -374,6 +414,9 @@ void game_modes_postspawn(
 {
 	switch (game_modes_mode())
 	{
+	case _game_mode_sticky:
+		game_modes_sticky_postspawn(player_index);
+		break;
 	case _game_mode_infection:
 		infection_postspawn(player_index);
 		break;
@@ -435,6 +478,13 @@ boolean game_modes_headshot_kills(
 		return FALSE;
 	unit = (struct unit_datum *)object_try_and_get_and_verify_type(object_index, _object_mask_biped);
 	return unit && unit->unit.player_index != NONE;
+}
+
+boolean game_modes_no_map_weapons(
+	void)
+{
+	return (game_engine_running() && game_variant_options_get()->no_map_weapons) ||
+		game_modes_mode() == _game_mode_sticky;
 }
 
 boolean game_modes_motion_sensor_hidden(

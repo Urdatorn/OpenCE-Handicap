@@ -60,6 +60,7 @@ def test_case(case):
     (('friendly_fire ||\n', ''), 'hardcore_no_restore'),
     (('return variant->universal_variant.teams ? _game_mode_infection', 'return 1 ? _game_mode_infection'),
      'variant_mode'),
+    (('case _game_mode_sticky:\n\t\treturn _game_mode_sticky;', ''), 'variant_mode'),
     (('if (!humans)\n\t\treturn 1;', 'if (!humans)\n\t\treturn NONE;'), 'round_result'),
     (('state->revision < revision ||', ''), 'state_valid'),
     (('player->reserved[0] || player->reserved[1] || player->reserved[2]', 'player->reserved[0]'), 'state_valid'),
