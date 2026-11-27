@@ -622,6 +622,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.map_seed` | `true` | `HALO_NET_MAP_SEED` | When you play in the game of another machine: help send its map to players who join without it. HELP SEND MAPS in Settings > Network Setup > Map Sharing. |
 | `network.map_seed_upload` | `256` | `HALO_NET_MAP_SEED_UPLOAD` | When you play in the game of another machine: the most kilobytes per second that the game sends of maps to other players (`16` to `10240`, 10 MB/s). UPLOAD LIMIT in Settings > Network Setup > Map Sharing. |
 | `network.map_download` | `true` | `HALO_NET_MAP_DOWNLOAD` | DOWNLOAD MAPS in Settings > Network Setup > Map Sharing. CE downloads from players as before; MCC permits a host offer and asks before transferring files. Off: CE leaves a missing-map game; MCC offers manual/Workshop installation and cancellation. |
+| `network.remember_passwords` | `true` | `HALO_NET_REMEMBER_PASSWORDS` | The server browser remembers the password of a game that it opened, and joins the games of that host again without asking. It keeps the key of the password for that host (`server_passwords.txt` in the saves folder), not the password. Refer to "Server browser". |
 | `network.coop_public` | `false` | `HALO_NET_COOP_PUBLIC` | `true`: an online co-op game (Create Game > Internet, a SINGLEPLAYER map) starts as PUBLIC. `false`: it starts as PRIVATE. LISTING in co-op's Server Setup writes its choice here. Refer to "Server browser". |
 | `network.coop_team_wipe` | `"auto"` | `HALO_NET_COOP_TEAM_WIPE` | TEAM WIPE in Server Setup > Co-op Options: `"auto"` reverts the checkpoint in a PRIVATE game and only respawns the team in a PUBLIC game (a dedicated server's: `server.public` with internet play). `"revert"` or `"respawn"` overrides visibility; a password does not make a PUBLIC game private. Changed players/machine assignments fall back to position-only respawn with a host diagnostic. A missing checkpoint also uses position-only respawn. Scripted mission failures keep their existing revert behavior. |
 | `network.brokers_file` | `"brokers.txt"` | `HALO_NET_BROKERS_FILE` | The file of the public MQTT brokers that let the machines of an invite find each other, and that carry the listings of the server browser: next to `config.toml`, unless a full path. One `host:port` on each line, up to 4; `#` starts a comment. |
@@ -1189,6 +1190,14 @@ password. A player who selects that game must type the password, and JOIN
 GAME joins only with the correct password. The invite link of the game joins
 it without the password. The host keeps the password only while the game
 runs.
+
+The browser remembers a password that opened a game: the next time, a game
+of that host joins at once, without the password screen
+(`network.remember_passwords`). It keeps the key that the password makes for
+that host (below), not the password, in `server_passwords.txt` in the saves
+folder, for the last 64 hosts. The key opens the games of that host only. If
+the host changes the password, the browser forgets the key and asks again.
+Delete the file to forget every password.
 
 In the Server Browser, as in Custom Edition's, a click selects a game
 (outlined in yellow), and a click on the selected game, a double click, A,

@@ -753,6 +753,12 @@ static const struct config_setting config_settings[] =
 		"download it (and the resource maps it needs) from the game's players\n"
 		"into custom_maps, if its host shares it (network.map_share); false\n"
 		"leaves the game, saying which map is missing." },
+	{ "network.remember_passwords", _config_boolean, "true", "HALO_NET_REMEMBER_PASSWORDS", _environment_value,
+		_platform_all,
+		"Whether the server browser remembers the password of a game it opened\n"
+		"and joins that host's games without asking again. What is kept, in the\n"
+		"saves folder's server_passwords.txt, is a key that opens that host's\n"
+		"games alone, not the password; delete the file to forget them all." },
 	{ "network.coop_public", _config_boolean, "false", "HALO_NET_COOP_PUBLIC", _environment_value, _platform_all,
 		"Whether an online co-op game (Create Game > Internet, a SINGLEPLAYER\n"
 		"map) starts as PUBLIC or, false, PRIVATE: Server Setup's LISTING in\n"

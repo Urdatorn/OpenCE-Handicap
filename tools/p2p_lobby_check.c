@@ -25,6 +25,7 @@ while listings wait to be checked. Prints PASS or the failures.
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 /* ---------- stand-ins for the rest of internet play */
 
@@ -44,6 +45,16 @@ void posix_random_bytes(void *buffer, unsigned long size) { memset(buffer, 0x5a,
 unsigned long p2p_now(void) { return clock_now; }
 int config_boolean(const char *name) { (void)name; return 1; }
 void platform_log(const char *format, ...) { (void)format; }
+/* (a folder of its own, for the remembered passwords' file) */
+const char *platform_save_root(void)
+{
+	static char folder[] = "/tmp/p2p_lobby_check_XXXXXX";
+	static int made;
+
+	if (!made)
+		made = mkdtemp(folder) != NULL;
+	return folder;
+}
 
 void p2p_hex(const unsigned char *bytes, int size, char *text)
 {
@@ -438,10 +449,38 @@ static void lobby_checks(void)
 			found |= !memcmp(published + offset, token, P2P_TOKEN_SIZE);
 		check(!found, "a locked listing does not hold its token");
 	}
-	check(!p2p_listing_unlock(&listing, "hunter3") && !listing.invite[0], "a wrong password opens nothing");
-	check(!p2p_listing_unlock(&listing, "") && !listing.invite[0], "no password opens nothing");
-	check(p2p_listing_unlock(&listing, "hunter2") && !strcmp(listing.invite, expected_invite),
-		"the password opens the host's invite");
+	{
+		struct p2p_listing locked = listing;
+
+		check(!p2p_listing_unlock_remembered(&locked) && !locked.invite[0], "no password remembered opens nothing");
+		check(!p2p_listing_unlock(&listing, "hunter3") && !listing.invite[0], "a wrong password opens nothing");
+		check(!p2p_listing_unlock(&listing, "") && !listing.invite[0], "no password opens nothing");
+		check(p2p_listing_unlock(&listing, "hunter2") && !strcmp(listing.invite, expected_invite),
+			"the password opens the host's invite");
+		/* (network.remember_passwords: the next time, without it) */
+		check(p2p_listing_unlock_remembered(&locked) && !strcmp(locked.invite, expected_invite),
+			"the remembered password opens the host's invite");
+		/* the host's password changed: the remembered one opens nothing, and is forgotten */
+		p2p_set_hosting_password("hunter4");
+		clock_now += 6000;
+		lobby_update(token, 3, 16);
+		hear(published, published_size, 0, NULL);
+		check(games(&locked) == 1 && locked.locked, "a new password is listed locked");
+		check(!p2p_listing_unlock_remembered(&locked) && !locked.invite[0], "an old remembered password opens nothing");
+		{
+			char path[512];
+			FILE *file;
+			char line[256];
+
+			snprintf(path, sizeof(path), "%s/server_passwords.txt", platform_save_root());
+			file = fopen(path, "rb");
+			check(file && !fgets(line, sizeof(line), file), "an old remembered password is forgotten");
+			if (file)
+				fclose(file);
+			remove(path);
+			rmdir(platform_save_root());
+		}
+	}
 	/* the password taken off: listed open again */
 	p2p_set_hosting_password(NULL);
 	clock_now += 6000;

@@ -318,6 +318,10 @@ void p2p_join_refused(int rejection_code);
 /* a locked game's invite (into its invite), if the password is its own:
 FALSE if not; TRUE for a game with none. It takes a few milliseconds */
 int p2p_listing_unlock(struct p2p_listing *listing, const char *password);
+/* a locked listing opened with the password key this machine remembers for
+its host (network.remember_passwords, which p2p_listing_unlock keeps):
+1 if it opened (or was not locked), else 0, and the password is asked */
+int p2p_listing_unlock_remembered(struct p2p_listing *listing);
 
 /* the sizes of a Discord user's id and name as kept (with their end), and
 the text kept of either as told: only the characters allowed (digits in an

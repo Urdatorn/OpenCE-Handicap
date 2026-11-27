@@ -1243,16 +1243,156 @@ void p2p_lobby_shown(const struct p2p_listing *games, int count)
 	pthread_mutex_unlock(&p2p_lock);
 }
 
-int p2p_listing_unlock(struct p2p_listing *listing, const char *password)
+/* ---------- remembered passwords
+
+network.remember_passwords: once a password opens a game's listing, the
+password's key (p2p_password_key: Argon2id of the password, salted with the
+host's key), not the password, is kept by the host's key in the saves
+folder's server_passwords.txt, the newest first; the browser opens that
+host's listing with it the next time, without asking
+(p2p_listing_unlock_remembered). A key opens that host's listings alone,
+and gives back nothing of the password; one the host's new password no
+longer opens is forgotten. */
+
+#define REMEMBERED_PASSWORDS_FILE "server_passwords.txt"
+#define MAXIMUM_REMEMBERED_PASSWORDS 64
+
+struct remembered_password
 {
+	unsigned char host[P2P_LISTING_SIGNING_KEY_SIZE];
 	unsigned char key[P2P_PASSWORD_KEY_SIZE];
+};
+
+static int remembered_hex_digit(char digit)
+{
+	if (digit >= '0' && digit <= '9')
+		return digit - '0';
+	if (digit >= 'a' && digit <= 'f')
+		return digit - 'a' + 10;
+	if (digit >= 'A' && digit <= 'F')
+		return digit - 'A' + 10;
+	return -1;
+}
+
+/* bytes from exactly 2 * size hexadecimal digits at text: 1, else 0 */
+static int remembered_hex_bytes(const char *text, unsigned char *bytes, int size)
+{
+	int index;
+
+	for (index = 0; index < size; index++)
+	{
+		int high = remembered_hex_digit(text[2 * index]);
+		int low = high >= 0 ? remembered_hex_digit(text[2 * index + 1]) : -1;
+
+		if (low < 0)
+			return 0;
+		bytes[index] = (unsigned char)(high << 4 | low);
+	}
+	return 1;
+}
+
+/* a line "<host's key> <password's key>", in hexadecimal: 1, else 0 */
+static int remembered_password_parse(const char *line, struct remembered_password *entry)
+{
+	return remembered_hex_bytes(line, entry->host, P2P_LISTING_SIGNING_KEY_SIZE) &&
+		line[2 * P2P_LISTING_SIGNING_KEY_SIZE] == ' ' &&
+		remembered_hex_bytes(line + 2 * P2P_LISTING_SIGNING_KEY_SIZE + 1, entry->key, P2P_PASSWORD_KEY_SIZE);
+}
+
+static void remembered_passwords_path(char *path, int size)
+{
+	snprintf(path, (size_t)size, "%s/%s", platform_save_root(), REMEMBERED_PASSWORDS_FILE);
+}
+
+/* the file's entries, the newest first; lines that are not one are passed over */
+static int remembered_passwords_read(struct remembered_password *entries)
+{
+	char path[1024];
+	char line[2 * (P2P_LISTING_SIGNING_KEY_SIZE + P2P_PASSWORD_KEY_SIZE) + 16];
+	FILE *file;
+	int count = 0;
+
+	remembered_passwords_path(path, (int)sizeof(path));
+	file = fopen(path, "rb");
+	if (!file)
+		return 0;
+	while (count < MAXIMUM_REMEMBERED_PASSWORDS && fgets(line, (int)sizeof(line), file))
+	{
+		if (remembered_password_parse(line, &entries[count]))
+			count++;
+	}
+	fclose(file);
+	memset(line, 0, sizeof(line));
+	return count;
+}
+
+static void remembered_passwords_write(const struct remembered_password *entries, int count)
+{
+	char path[1024];
+	char host[2 * P2P_LISTING_SIGNING_KEY_SIZE + 1];
+	char key[2 * P2P_PASSWORD_KEY_SIZE + 1];
+	FILE *file;
+	int index;
+
+	remembered_passwords_path(path, (int)sizeof(path));
+	file = fopen(path, "wb");
+	if (!file)
+	{
+		platform_log("server browser: %s cannot be written; the password is not remembered", path);
+		return;
+	}
+	for (index = 0; index < count; index++)
+	{
+		p2p_hex(entries[index].host, P2P_LISTING_SIGNING_KEY_SIZE, host);
+		p2p_hex(entries[index].key, P2P_PASSWORD_KEY_SIZE, key);
+		fprintf(file, "%s %s\n", host, key);
+	}
+	fclose(file);
+	memset(key, 0, sizeof(key));
+}
+
+/* the entries with the host's moved to the front with this key (key NULL:
+taken out), the oldest dropped past MAXIMUM_REMEMBERED_PASSWORDS: their new
+count */
+static int remembered_passwords_update(struct remembered_password *entries, int count, const unsigned char *host,
+	const unsigned char *key)
+{
+	int index;
+	int kept = 0;
+
+	for (index = 0; index < count; index++)
+	{
+		if (!memcmp(entries[index].host, host, P2P_LISTING_SIGNING_KEY_SIZE))
+			continue;
+		entries[kept++] = entries[index];
+	}
+	if (!key)
+		return kept;
+	if (kept == MAXIMUM_REMEMBERED_PASSWORDS)
+		kept--;
+	memmove(&entries[1], &entries[0], (size_t)kept * sizeof(entries[0]));
+	memcpy(entries[0].host, host, P2P_LISTING_SIGNING_KEY_SIZE);
+	memcpy(entries[0].key, key, P2P_PASSWORD_KEY_SIZE);
+	return kept + 1;
+}
+
+static void remembered_password_set(const unsigned char *host, const unsigned char *key)
+{
+	struct remembered_password entries[MAXIMUM_REMEMBERED_PASSWORDS];
+	int count = remembered_passwords_read(entries);
+
+	count = remembered_passwords_update(entries, count, host, key);
+	remembered_passwords_write(entries, count);
+	memset(entries, 0, sizeof(entries));
+}
+
+/* the listing's invite, if the key opens its token: 1, else 0 */
+static int listing_open(struct p2p_listing *listing, const unsigned char *key)
+{
 	unsigned char bytes[P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE];
 	char text[2 * (P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE) + 1];
 	int opened;
 
-	if (!listing->locked)
-		return 1;
-	p2p_password_key(password ? password : "", listing->signing_key, key);
 	memcpy(bytes, listing->key_hash, P2P_KEY_HASH_SIZE);
 	opened = p2p_unseal_token(key, listing->signing_key, listing->sealed_token, bytes + P2P_KEY_HASH_SIZE);
 	if (opened)
@@ -1260,8 +1400,52 @@ int p2p_listing_unlock(struct p2p_listing *listing, const char *password)
 		p2p_hex(bytes, sizeof(bytes), text);
 		snprintf(listing->invite, sizeof(listing->invite), "halo://join/%s", text);
 	}
-	memset(key, 0, sizeof(key));
 	memset(bytes, 0, sizeof(bytes));
+	return opened;
+}
+
+int p2p_listing_unlock(struct p2p_listing *listing, const char *password)
+{
+	unsigned char key[P2P_PASSWORD_KEY_SIZE];
+	int opened;
+
+	if (!listing->locked)
+		return 1;
+	p2p_password_key(password ? password : "", listing->signing_key, key);
+	opened = listing_open(listing, key);
+	if (opened && config_boolean("network.remember_passwords"))
+		remembered_password_set(listing->signing_key, key);
+	memset(key, 0, sizeof(key));
+	return opened;
+}
+
+int p2p_listing_unlock_remembered(struct p2p_listing *listing)
+{
+	struct remembered_password entries[MAXIMUM_REMEMBERED_PASSWORDS];
+	int count;
+	int index;
+	int opened = 0;
+
+	if (!listing->locked)
+		return 1;
+	if (!config_boolean("network.remember_passwords"))
+		return 0;
+	count = remembered_passwords_read(entries);
+	for (index = 0; index < count; index++)
+	{
+		if (memcmp(entries[index].host, listing->signing_key, P2P_LISTING_SIGNING_KEY_SIZE))
+			continue;
+		opened = listing_open(listing, entries[index].key);
+		/* (its password changed: the screen asks for the new one) */
+		if (!opened)
+		{
+			platform_log("server browser: %s's remembered password no longer opens it; forgotten", listing->name);
+			remembered_passwords_write(entries, remembered_passwords_update(entries, count, listing->signing_key,
+				NULL));
+		}
+		break;
+	}
+	memset(entries, 0, sizeof(entries));
 	return opened;
 }
 
