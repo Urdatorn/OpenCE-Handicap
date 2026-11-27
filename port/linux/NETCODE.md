@@ -47,6 +47,20 @@ with ideas from VALORANT's netcode articles, keeping the 30 Hz tick:
     host's is once that stops, or if they drift apart while it moves;
   - which named objects exist, so scripted creates and deletes match.
 
+  The camera sent is the host's first local player's. A dedicated server
+  has no local player, so while the scripts have the camera
+  (`camera_control`) its first observer films their camera as a player's
+  would (`director_unattended_scripted_camera`, director.c); before, it
+  never ran, and every client watched a cutscene from the world's origin.
+  Only the camera's values changed: no network version. A dedicated server
+  of an earlier build still sends that camera, which stays as a map's start
+  leaves an observer (at the world's origin, looking down x), where no shot
+  is. A client that gets it keeps the cutscene's view but watches the
+  cutscene's actors instead (`client_watch_cutscene`, network_coop.c): the
+  unit the host's scripts last started a custom animation on, which every
+  build sends, else its own player, framed as spectating frames a teammate
+  the scripts hold.
+
   The scripts' looping sounds (music, ambience, a cutscene's music and
   dialogue) are resent every two seconds, so a machine that joins hears
   them. The resends of one that plays once (a fake impulse looping sound)
@@ -184,8 +198,9 @@ lockstep netcode was removed, set to play it): it tells the player why.
 
 OpenCE network version 42 replaced version 41 for Xbox, Custom Edition and MCC sessions;
 version 44 (below, "Versions") replaces it.
-Advertisements and ordinary join requests carry this one version; mismatched
-versions are rejected before admission. There is no separate MCC capability
+Advertisements and ordinary join requests carry a version; one this build
+does not play with is rejected before admission ("Versions": version 43
+plays with 44, but not on an MCC map). There is no separate MCC capability
 envelope or optional shoulder-camera protocol. Retired fork message IDs 101 and
 102 remain unused. The historical version-41 record is retained as a test fixture,
 not a crossplay promise.
@@ -225,12 +240,35 @@ passing unit checks alone does not establish every-map compatibility.
 
 The native builds' network code has a version, an unsigned 16-bit number
 (`HALO_PORT_NETWORK_VERSION` in `port/linux/include/halo_port_limits.h`),
-raised with any change to what the machines send each other. A host puts it
-in its game's advertisement (reserved bytes that hosts built before there
-was a version send as zeros, so they are version 0). A client does not join
-a host of another version: it shows a message box that says which of the
-two is newer, with both versions ("update the game" or "ask the host to
-update"), and stays in the list of games. Version 1 was the first of this
+raised with any change to what the machines send each other. A host puts a
+version in its game's advertisement (reserved bytes that hosts built before
+there was a version send as zeros, so they are version 0). A build plays
+with a range of versions, from `HALO_PORT_NETWORK_VERSION_OLDEST` to its own
+(`HALO_PORT_NETWORK_VERSION_PLAYS`): a client joins a host of any of them,
+and says the host's version in its join request when it is older (a host of
+a build before the range takes only its own); a host takes a client of any
+of them, in a game on an MCC map from `HALO_PORT_NETWORK_VERSION_OLDEST_MCC`.
+A client does not join a host of a version outside it: it shows a message
+box that says which of the two is newer, with both versions ("update the
+game" or "ask the host to update"), and stays in the list of games.
+
+A version raised for a change that the version before it still plays with
+(the wire format recorded in `network_format.txt` the same, and nothing
+either side does that the other's game needs to know) keeps
+`HALO_PORT_NETWORK_VERSION_OLDEST`; a change it cannot play with raises
+`HALO_PORT_NETWORK_VERSION_OLDEST` to the new version. A host advertises
+`HALO_PORT_NETWORK_VERSION_ADVERTISED`, or `network.advertise_version` when
+this build plays with it (an MCC map's game at least
+`HALO_PORT_NETWORK_VERSION_OLDEST_MCC`), in its advertisement and its server
+browser listing: builds released before the range join only a host that
+advertises their own version, so it is kept at the version players have
+while a newer one plays with it. Version 43, as released (Build 344 on,
+with vehicle riding), sends what 44 sends; 44 changed MCC package sharing
+alone, so 43 plays with 44 but not on an MCC map, where a host of 44 leaves
+out the base resources a machine of 43 cannot find on its own. A host of
+44 that changes to an MCC map with a machine of 43 in its lobby goes on:
+that machine's package check fails, as it does for any machine without the
+map, and the start leaves it out. Version 1 was the first of this
 netcode; version 2 lets a machine join a game in progress; version 3 puts
 each player in its slot of the host's player list on every machine;
 version 4 plays the European (PAL) maps as the North American ones
@@ -591,21 +629,14 @@ machine's voice either (`network_voice.c`'s `voice_host_relay`, by the
 names of the network game's players, which the lobby has too). A
 machine's own scoreboard mute stays its own: it plays none of that
 machine's voice and shows none of its players' lines, and tells no one.
-The host's chat settings (`network.text_chat`: on, links allowed, or off;
-always off while a player's game is listed in the server browser,
-`p2p_hosting_listed`, but a dedicated server's own, `chat_listing_allows`)
-go to every client in
+The host's chat settings (`network.text_chat`: on, links allowed, or off),
+in every game, listed in the server browser or not, go to every client in
 `_distributed_message_chat_config` (one byte of flags), reliably, as they
 change and every 3 seconds. A client without them (from a host without the
-chat, or before they come) has the chat off, and so does a client in a
-public game it joined from the server browser, whatever its host sends (a
-changed host could turn the chat on): while the tunnel reaches the host of
-the listing it joined (`p2p_join_listing`, `p2p_joined_listed_host`; any
-other invite joined since forgets it), it takes no chat line or notice and
-sends none, unless the listing was a dedicated server's that a master
-server lists (`p2p_joined_listed_dedicated`: the master's word, from an
-approved operator's key; a listing's own dedicated flag, which any host can
-set, does not count), whose settings it follows. A client refuses a line the
+chat, or before they come) has the chat off. (Older builds keep the chat
+off in a public game a player hosts, whatever its host sends: they take no
+line from that host and send none, so their players there have no chat;
+the messages are unchanged, and the network version with them.) A client refuses a line the
 settings refuse before sending it, and the host refuses it again whatever
 the client knew, telling its machine why: a changed build gets no further.
 Links are found in the line's text (`chat_text_has_link`): a scheme, `www.`,
@@ -756,7 +787,9 @@ its name alone beside it, has its name given back as the map lists find it.
   downloading starts the others without it: the machine's players are held
   out of the game, and so is any player it asks for meanwhile (a machine
   whose download began in the lobby does not know the game has started),
-  and the machine joins the game in progress once the map is there. A
+  and the machine joins the game in progress once the map is there. Not
+  told to load, it is neither waited for nor timed out while the others
+  load, even if the map is there before they have loaded. A
   client told to start before its download is done (by a host of an earlier
   build) puts the start off until the map is there, rather than loading a
   map it does not have yet (the damaged disc error, which stops the game).
@@ -780,8 +813,13 @@ its name alone beside it, has its name given back as the map lists find it.
   others on port 5153 (of two downloading, the one of the lower machine
   connects). Each end says which files it has, whole or by piece, and tells
   the other of each piece it gets; the client asks for the rarest pieces
-  first (from a random place, so that clients ask for different pieces), two
-  at a time from each connection, sixteen in all, and the last few again of
+  first (from a random place, so that clients ask for different pieces),
+  eight at a time of the host (as many as every version sends at once: it
+  refuses more, so this needs no network version; two at a time held a
+  download from it to about 15 MB/s, a piece coming a round trip, about two
+  frames, after it is asked for), two of another player (who sends 10 MB/s
+  at most, so that a slow one holds few of the last pieces), thirty-two in
+  all, and the last few again of
   whoever is quicker. The pieces' hashes come from the host (from the
   others it named after ten seconds without them, and from the connections
   other machines made after thirty), all of them within a minute, checked
